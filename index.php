@@ -85,10 +85,10 @@
             <div class="container">
                 <div class="row gy-4">
                     <div class="col-lg-6 order-2 order-lg-1 d-flex flex-column justify-content-center">
-                        <h1>Bettter Digital Experience With kasUbAyTech</h1>
-                        <p>We are team of talented designers making websites with Bootstrap</p>
+                        <h1>Welcome to kasUbAyTech!</h1>
+                        <p>Start your assessment by clicking</p>
                         <div class="d-flex">
-                            <a href="#about" class="btn-get-started">Get Started</a>
+                            <a href="register.php" class="btn-get-started">Get Started</a>
                         </div>
                     </div>
                     <div class="col-lg-6 order-1 order-lg-2 hero-img">
