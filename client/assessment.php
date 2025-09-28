@@ -59,6 +59,11 @@ $reference_id = $_GET['id'];
 
                         <div class="container mt-5">
                             <div class="card">
+                                <div class="d-flex justify-content-center py-4">
+                                    <!-- Timer Display -->
+                                    <div id="timer" class="fw-bold fs-4 text-danger">01:00</div>
+                                </div>
+
                                 <div class="card-body" id="quizCard">
 
                                     <h5 class="card-title text-center pb-0 fs-4">Multiple Choice Questionnaire</h5>
@@ -178,6 +183,42 @@ $reference_id = $_GET['id'];
                         const questions = document.querySelectorAll('.question');
                         let currentIndex = 0;
 
+                        // Timer Variables
+                        let timerInterval;
+                        let timeLeft = 60;
+
+                        function startTimer() {
+                            clearInterval(timerInterval); // reset old timer
+                            timeLeft = 60;
+                            updateTimerDisplay();
+
+                            timerInterval = setInterval(() => {
+                                timeLeft--;
+                                updateTimerDisplay();
+
+                                if (timeLeft <= 0) {
+                                    clearInterval(timerInterval);
+                                    autoNextQuestion();
+                                }
+                            }, 1000);
+                        }
+
+                        function updateTimerDisplay() {
+                            const minutes = String(Math.floor(timeLeft / 60)).padStart(2, "0");
+                            const seconds = String(timeLeft % 60).padStart(2, "0");
+                            document.getElementById("timer").textContent = `${minutes}:${seconds}`;
+                        }
+
+                        function autoNextQuestion() {
+                            const nextBtn = document.querySelectorAll('.next-btn')[currentIndex];
+                            if (nextBtn) {
+                                nextBtn.click(); // simulate user clicking next
+                            } else {
+                                document.getElementById('quizForm').requestSubmit(); // auto-submit final
+                            }
+                        }
+
+                        // Next button logic with swoosh
                         document.querySelectorAll('.next-btn').forEach(button => {
                             button.addEventListener('click', function() {
                                 const currentQ = questions[currentIndex];
@@ -185,15 +226,12 @@ $reference_id = $_GET['id'];
 
                                 if (!nextQ) return;
 
-                                // Slide out current question
                                 quizCard.classList.add('slide-out-left');
 
                                 quizCard.addEventListener('animationend', function handler() {
-                                    // Hide current, show next
                                     currentQ.classList.add('d-none');
                                     nextQ.classList.remove('d-none');
 
-                                    // Reset animation, slide in new content
                                     quizCard.classList.remove('slide-out-left');
                                     quizCard.classList.add('slide-in-right');
 
@@ -206,12 +244,17 @@ $reference_id = $_GET['id'];
 
                                     currentIndex++;
                                     quizCard.removeEventListener('animationend', handler);
+
+                                    startTimer(); // reset timer for next question
                                 });
                             });
                         });
 
+                        // Form submit
                         document.getElementById('quizForm').addEventListener('submit', function(e) {
                             e.preventDefault();
+                            clearInterval(timerInterval); // stop timer
+
                             quizCard.classList.add('slide-out-left');
 
                             quizCard.addEventListener('animationend', function handler() {
@@ -222,7 +265,11 @@ $reference_id = $_GET['id'];
                                 quizCard.removeEventListener('animationend', handler);
                             });
                         });
+
+                        // Start timer when first question appears
+                        startTimer();
                         </script>
+
 
                         <div class="credits">
                             Designed by <a href="https://bootstrapmade.com/" class="text-white">BootstrapMade</a>
