@@ -1,6 +1,10 @@
+<?php 
+$currentFile = basename($_SERVER['PHP_SELF']);
+?>
+
 <nav id="sidebar" class="sidebar js-sidebar">
     <div class="sidebar-content js-simplebar">
-        <a class="sidebar-brand" href="index.html">
+        <a class="sidebar-brand" href="homepage.php">
             <span class="align-middle">KasUbAyTech <span class="badge bg-primary text-small">admin</span></span>
         </a>
         <ul class="sidebar-nav">
@@ -8,88 +12,27 @@
                 Pages
             </li>
 
-            <li class="sidebar-item active">
-                <a class="sidebar-link" href="index.html">
-                    <i class="align-middle" data-feather="sliders"></i> <span class="align-middle">Dashboard</span>
-                </a>
-            </li>
-
-            <li class="sidebar-item">
-                <a class="sidebar-link" href="pages-profile.html">
-                    <i class="align-middle" data-feather="user"></i> <span class="align-middle">Profile</span>
-                </a>
-            </li>
-
-            <li class="sidebar-item">
-                <a class="sidebar-link" href="pages-sign-in.html">
-                    <i class="align-middle" data-feather="log-in"></i> <span class="align-middle">Sign In</span>
-                </a>
-            </li>
-
-            <li class="sidebar-item">
-                <a class="sidebar-link" href="pages-sign-up.html">
-                    <i class="align-middle" data-feather="user-plus"></i> <span class="align-middle">Sign Up</span>
-                </a>
-            </li>
-
-            <li class="sidebar-item">
-                <a class="sidebar-link" href="pages-blank.html">
-                    <i class="align-middle" data-feather="book"></i> <span class="align-middle">Blank</span>
+            <li class="sidebar-item <?php echo ($currentFile == 'homepage.php') ? 'active' : ''; ?>">
+                <a class="sidebar-link" href="index.php">
+                    <i class="align-middle" data-feather="sliders"></i>
+                    <span class="align-middle">Dashboard</span>
                 </a>
             </li>
 
             <li class="sidebar-header">
-                Tools & Components
+                Management
             </li>
 
-            <li class="sidebar-item">
+            <li class="sidebar-item <?php echo ($currentFile == 'questions.php') ? 'active' : ''; ?>">
                 <a class="sidebar-link" href="questions.php">
-                    <i class="align-middle" data-feather="edit-2"></i> <span class="align-middle">Questions</span>
-                </a>
-            </li>
-
-            <li class="sidebar-item">
-                <a class="sidebar-link" href="ui-forms.html">
-                    <i class="align-middle" data-feather="check-square"></i> <span class="align-middle">Forms</span>
-                </a>
-            </li>
-
-            <li class="sidebar-item">
-                <a class="sidebar-link" href="ui-cards.html">
-                    <i class="align-middle" data-feather="grid"></i> <span class="align-middle">Cards</span>
-                </a>
-            </li>
-
-            <li class="sidebar-item">
-                <a class="sidebar-link" href="ui-typography.html">
-                    <i class="align-middle" data-feather="align-left"></i> <span class="align-middle">Typography</span>
-                </a>
-            </li>
-
-            <li class="sidebar-item">
-                <a class="sidebar-link" href="icons-feather.html">
-                    <i class="align-middle" data-feather="coffee"></i> <span class="align-middle">Icons</span>
-                </a>
-            </li>
-
-            <li class="sidebar-header">
-                Plugins & Addons
-            </li>
-
-            <li class="sidebar-item">
-                <a class="sidebar-link" href="charts-chartjs.html">
-                    <i class="align-middle" data-feather="bar-chart-2"></i> <span class="align-middle">Charts</span>
-                </a>
-            </li>
-
-            <li class="sidebar-item">
-                <a class="sidebar-link" href="maps-google.html">
-                    <i class="align-middle" data-feather="map"></i> <span class="align-middle">Maps</span>
+                    <i class="align-middle" data-feather="edit-2"></i>
+                    <span class="align-middle">Questions</span>
                 </a>
             </li>
         </ul>
     </div>
 </nav>
+
 
 <div class="main">
     <nav class="navbar navbar-expand navbar-light navbar-bg">
@@ -260,7 +203,7 @@
                         <a class="dropdown-item" href="#"><i class="align-middle me-1" data-feather="help-circle"></i>
                             Help Center</a>
                         <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" href="#">Log out</a>
+                        <a class="dropdown-item" href=".../admin_logout.php">Log out</a>
                     </div>
                 </li>
             </ul>
