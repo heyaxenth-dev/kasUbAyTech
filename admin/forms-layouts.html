@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta content="width=device-width, initial-scale=1.0" name="viewport">
 
-  <title>Charts / Chart.js - NiceAdmin Bootstrap Template</title>
+  <title>Forms / Layouts - NiceAdmin Bootstrap Template</title>
   <meta content="" name="description">
   <meta content="" name="keywords">
 
@@ -360,17 +360,17 @@
       </li><!-- End Components Nav -->
 
       <li class="nav-item">
-        <a class="nav-link collapsed" data-bs-target="#forms-nav" data-bs-toggle="collapse" href="#">
+        <a class="nav-link " data-bs-target="#forms-nav" data-bs-toggle="collapse" href="#">
           <i class="bi bi-journal-text"></i><span>Forms</span><i class="bi bi-chevron-down ms-auto"></i>
         </a>
-        <ul id="forms-nav" class="nav-content collapse " data-bs-parent="#sidebar-nav">
+        <ul id="forms-nav" class="nav-content collapse show" data-bs-parent="#sidebar-nav">
           <li>
             <a href="forms-elements.html">
               <i class="bi bi-circle"></i><span>Form Elements</span>
             </a>
           </li>
           <li>
-            <a href="forms-layouts.html">
+            <a href="forms-layouts.html" class="active">
               <i class="bi bi-circle"></i><span>Form Layouts</span>
             </a>
           </li>
@@ -406,12 +406,12 @@
       </li><!-- End Tables Nav -->
 
       <li class="nav-item">
-        <a class="nav-link " data-bs-target="#charts-nav" data-bs-toggle="collapse" href="#">
+        <a class="nav-link collapsed" data-bs-target="#charts-nav" data-bs-toggle="collapse" href="#">
           <i class="bi bi-bar-chart"></i><span>Charts</span><i class="bi bi-chevron-down ms-auto"></i>
         </a>
-        <ul id="charts-nav" class="nav-content collapse show" data-bs-parent="#sidebar-nav">
+        <ul id="charts-nav" class="nav-content collapse " data-bs-parent="#sidebar-nav">
           <li>
-            <a href="charts-chartjs.html" class="active">
+            <a href="charts-chartjs.html">
               <i class="bi bi-circle"></i><span>Chart.js</span>
             </a>
           </li>
@@ -509,428 +509,281 @@
   <main id="main" class="main">
 
     <div class="pagetitle">
-      <h1>Chart.js</h1>
+      <h1>Form Layouts</h1>
       <nav>
         <ol class="breadcrumb">
           <li class="breadcrumb-item"><a href="index.html">Home</a></li>
-          <li class="breadcrumb-item">Charts</li>
-          <li class="breadcrumb-item active">Chart.js</li>
+          <li class="breadcrumb-item">Forms</li>
+          <li class="breadcrumb-item active">Layouts</li>
         </ol>
       </nav>
     </div><!-- End Page Title -->
-
-    <p>Chart.JS Examples. You can check the <a href="https://www.chartjs.org/docs/latest/samples/" target="_blank">official website</a> for more examples.</p>
-
     <section class="section">
       <div class="row">
-
         <div class="col-lg-6">
+
           <div class="card">
             <div class="card-body">
-              <h5 class="card-title">Line Chart</h5>
+              <h5 class="card-title">Horizontal Form</h5>
 
-              <!-- Line Chart -->
-              <canvas id="lineChart" style="max-height: 400px;"></canvas>
-              <script>
-                document.addEventListener("DOMContentLoaded", () => {
-                  new Chart(document.querySelector('#lineChart'), {
-                    type: 'line',
-                    data: {
-                      labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July'],
-                      datasets: [{
-                        label: 'Line Chart',
-                        data: [65, 59, 80, 81, 56, 55, 40],
-                        fill: false,
-                        borderColor: 'rgb(75, 192, 192)',
-                        tension: 0.1
-                      }]
-                    },
-                    options: {
-                      scales: {
-                        y: {
-                          beginAtZero: true
-                        }
-                      }
-                    }
-                  });
-                });
-              </script>
-              <!-- End Line CHart -->
+              <!-- Horizontal Form -->
+              <form>
+                <div class="row mb-3">
+                  <label for="inputEmail3" class="col-sm-2 col-form-label">Your Name</label>
+                  <div class="col-sm-10">
+                    <input type="text" class="form-control" id="inputText">
+                  </div>
+                </div>
+                <div class="row mb-3">
+                  <label for="inputEmail3" class="col-sm-2 col-form-label">Email</label>
+                  <div class="col-sm-10">
+                    <input type="email" class="form-control" id="inputEmail">
+                  </div>
+                </div>
+                <div class="row mb-3">
+                  <label for="inputPassword3" class="col-sm-2 col-form-label">Password</label>
+                  <div class="col-sm-10">
+                    <input type="password" class="form-control" id="inputPassword">
+                  </div>
+                </div>
+                <fieldset class="row mb-3">
+                  <legend class="col-form-label col-sm-2 pt-0">Radios</legend>
+                  <div class="col-sm-10">
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="gridRadios" id="gridRadios1" value="option1" checked>
+                      <label class="form-check-label" for="gridRadios1">
+                        First radio
+                      </label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="gridRadios" id="gridRadios2" value="option2">
+                      <label class="form-check-label" for="gridRadios2">
+                        Second radio
+                      </label>
+                    </div>
+                    <div class="form-check disabled">
+                      <input class="form-check-input" type="radio" name="gridRadios" id="gridRadios3" value="option3" disabled>
+                      <label class="form-check-label" for="gridRadios3">
+                        Third disabled radio
+                      </label>
+                    </div>
+                  </div>
+                </fieldset>
+                <div class="row mb-3">
+                  <div class="col-sm-10 offset-sm-2">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="gridCheck1">
+                      <label class="form-check-label" for="gridCheck1">
+                        Example checkbox
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div class="text-center">
+                  <button type="submit" class="btn btn-primary">Submit</button>
+                  <button type="reset" class="btn btn-secondary">Reset</button>
+                </div>
+              </form><!-- End Horizontal Form -->
 
             </div>
           </div>
-        </div>
 
-        <div class="col-lg-6">
           <div class="card">
             <div class="card-body">
-              <h5 class="card-title">Bar CHart</h5>
+              <h5 class="card-title">Multi Columns Form</h5>
 
-              <!-- Bar Chart -->
-              <canvas id="barChart" style="max-height: 400px;"></canvas>
-              <script>
-                document.addEventListener("DOMContentLoaded", () => {
-                  new Chart(document.querySelector('#barChart'), {
-                    type: 'bar',
-                    data: {
-                      labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July'],
-                      datasets: [{
-                        label: 'Bar Chart',
-                        data: [65, 59, 80, 81, 56, 55, 40],
-                        backgroundColor: [
-                          'rgba(255, 99, 132, 0.2)',
-                          'rgba(255, 159, 64, 0.2)',
-                          'rgba(255, 205, 86, 0.2)',
-                          'rgba(75, 192, 192, 0.2)',
-                          'rgba(54, 162, 235, 0.2)',
-                          'rgba(153, 102, 255, 0.2)',
-                          'rgba(201, 203, 207, 0.2)'
-                        ],
-                        borderColor: [
-                          'rgb(255, 99, 132)',
-                          'rgb(255, 159, 64)',
-                          'rgb(255, 205, 86)',
-                          'rgb(75, 192, 192)',
-                          'rgb(54, 162, 235)',
-                          'rgb(153, 102, 255)',
-                          'rgb(201, 203, 207)'
-                        ],
-                        borderWidth: 1
-                      }]
-                    },
-                    options: {
-                      scales: {
-                        y: {
-                          beginAtZero: true
-                        }
-                      }
-                    }
-                  });
-                });
-              </script>
-              <!-- End Bar CHart -->
+              <!-- Multi Columns Form -->
+              <form class="row g-3">
+                <div class="col-md-12">
+                  <label for="inputName5" class="form-label">Your Name</label>
+                  <input type="text" class="form-control" id="inputName5">
+                </div>
+                <div class="col-md-6">
+                  <label for="inputEmail5" class="form-label">Email</label>
+                  <input type="email" class="form-control" id="inputEmail5">
+                </div>
+                <div class="col-md-6">
+                  <label for="inputPassword5" class="form-label">Password</label>
+                  <input type="password" class="form-control" id="inputPassword5">
+                </div>
+                <div class="col-12">
+                  <label for="inputAddress5" class="form-label">Address</label>
+                  <input type="text" class="form-control" id="inputAddres5s" placeholder="1234 Main St">
+                </div>
+                <div class="col-12">
+                  <label for="inputAddress2" class="form-label">Address 2</label>
+                  <input type="text" class="form-control" id="inputAddress2" placeholder="Apartment, studio, or floor">
+                </div>
+                <div class="col-md-6">
+                  <label for="inputCity" class="form-label">City</label>
+                  <input type="text" class="form-control" id="inputCity">
+                </div>
+                <div class="col-md-4">
+                  <label for="inputState" class="form-label">State</label>
+                  <select id="inputState" class="form-select">
+                    <option selected>Choose...</option>
+                    <option>...</option>
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <label for="inputZip" class="form-label">Zip</label>
+                  <input type="text" class="form-control" id="inputZip">
+                </div>
+                <div class="col-12">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="gridCheck">
+                    <label class="form-check-label" for="gridCheck">
+                      Check me out
+                    </label>
+                  </div>
+                </div>
+                <div class="text-center">
+                  <button type="submit" class="btn btn-primary">Submit</button>
+                  <button type="reset" class="btn btn-secondary">Reset</button>
+                </div>
+              </form><!-- End Multi Columns Form -->
 
             </div>
           </div>
+
         </div>
 
         <div class="col-lg-6">
+
           <div class="card">
             <div class="card-body">
-              <h5 class="card-title">Pie Chart</h5>
+              <h5 class="card-title">Vertical Form</h5>
 
-              <!-- Pie Chart -->
-              <canvas id="pieChart" style="max-height: 400px;"></canvas>
-              <script>
-                document.addEventListener("DOMContentLoaded", () => {
-                  new Chart(document.querySelector('#pieChart'), {
-                    type: 'pie',
-                    data: {
-                      labels: [
-                        'Red',
-                        'Blue',
-                        'Yellow'
-                      ],
-                      datasets: [{
-                        label: 'My First Dataset',
-                        data: [300, 50, 100],
-                        backgroundColor: [
-                          'rgb(255, 99, 132)',
-                          'rgb(54, 162, 235)',
-                          'rgb(255, 205, 86)'
-                        ],
-                        hoverOffset: 4
-                      }]
-                    }
-                  });
-                });
-              </script>
-              <!-- End Pie CHart -->
+              <!-- Vertical Form -->
+              <form class="row g-3">
+                <div class="col-12">
+                  <label for="inputNanme4" class="form-label">Your Name</label>
+                  <input type="text" class="form-control" id="inputNanme4">
+                </div>
+                <div class="col-12">
+                  <label for="inputEmail4" class="form-label">Email</label>
+                  <input type="email" class="form-control" id="inputEmail4">
+                </div>
+                <div class="col-12">
+                  <label for="inputPassword4" class="form-label">Password</label>
+                  <input type="password" class="form-control" id="inputPassword4">
+                </div>
+                <div class="col-12">
+                  <label for="inputAddress" class="form-label">Address</label>
+                  <input type="text" class="form-control" id="inputAddress" placeholder="1234 Main St">
+                </div>
+                <div class="text-center">
+                  <button type="submit" class="btn btn-primary">Submit</button>
+                  <button type="reset" class="btn btn-secondary">Reset</button>
+                </div>
+              </form><!-- Vertical Form -->
 
             </div>
           </div>
-        </div>
 
-        <div class="col-lg-6">
           <div class="card">
             <div class="card-body">
-              <h5 class="card-title">Doughnut Chart</h5>
+              <h5 class="card-title">No Labels / Placeholders as labels Form</h5>
 
-              <!-- Doughnut Chart -->
-              <canvas id="doughnutChart" style="max-height: 400px;"></canvas>
-              <script>
-                document.addEventListener("DOMContentLoaded", () => {
-                  new Chart(document.querySelector('#doughnutChart'), {
-                    type: 'doughnut',
-                    data: {
-                      labels: [
-                        'Red',
-                        'Blue',
-                        'Yellow'
-                      ],
-                      datasets: [{
-                        label: 'My First Dataset',
-                        data: [300, 50, 100],
-                        backgroundColor: [
-                          'rgb(255, 99, 132)',
-                          'rgb(54, 162, 235)',
-                          'rgb(255, 205, 86)'
-                        ],
-                        hoverOffset: 4
-                      }]
-                    }
-                  });
-                });
-              </script>
-              <!-- End Doughnut CHart -->
+              <!-- No Labels Form -->
+              <form class="row g-3">
+                <div class="col-md-12">
+                  <input type="text" class="form-control" placeholder="Your Name">
+                </div>
+                <div class="col-md-6">
+                  <input type="email" class="form-control" placeholder="Email">
+                </div>
+                <div class="col-md-6">
+                  <input type="password" class="form-control" placeholder="Password">
+                </div>
+                <div class="col-12">
+                  <input type="text" class="form-control" placeholder="Address">
+                </div>
+                <div class="col-md-6">
+                  <input type="text" class="form-control" placeholder="City">
+                </div>
+                <div class="col-md-4">
+                  <select id="inputState" class="form-select">
+                    <option selected>Choose...</option>
+                    <option>...</option>
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <input type="text" class="form-control" placeholder="Zip">
+                </div>
+                <div class="text-center">
+                  <button type="submit" class="btn btn-primary">Submit</button>
+                  <button type="reset" class="btn btn-secondary">Reset</button>
+                </div>
+              </form><!-- End No Labels Form -->
 
             </div>
           </div>
-        </div>
 
-        <div class="col-lg-6">
           <div class="card">
             <div class="card-body">
-              <h5 class="card-title">Radar Chart</h5>
+              <h5 class="card-title">Floating labels Form</h5>
 
-              <!-- Radar Chart -->
-              <canvas id="radarChart" style="max-height: 400px;"></canvas>
-              <script>
-                document.addEventListener("DOMContentLoaded", () => {
-                  new Chart(document.querySelector('#radarChart'), {
-                    type: 'radar',
-                    data: {
-                      labels: [
-                        'Eating',
-                        'Drinking',
-                        'Sleeping',
-                        'Designing',
-                        'Coding',
-                        'Cycling',
-                        'Running'
-                      ],
-                      datasets: [{
-                        label: 'First Dataset',
-                        data: [65, 59, 90, 81, 56, 55, 40],
-                        fill: true,
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                        borderColor: 'rgb(255, 99, 132)',
-                        pointBackgroundColor: 'rgb(255, 99, 132)',
-                        pointBorderColor: '#fff',
-                        pointHoverBackgroundColor: '#fff',
-                        pointHoverBorderColor: 'rgb(255, 99, 132)'
-                      }, {
-                        label: 'Second Dataset',
-                        data: [28, 48, 40, 19, 96, 27, 100],
-                        fill: true,
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        borderColor: 'rgb(54, 162, 235)',
-                        pointBackgroundColor: 'rgb(54, 162, 235)',
-                        pointBorderColor: '#fff',
-                        pointHoverBackgroundColor: '#fff',
-                        pointHoverBorderColor: 'rgb(54, 162, 235)'
-                      }]
-                    },
-                    options: {
-                      elements: {
-                        line: {
-                          borderWidth: 3
-                        }
-                      }
-                    }
-                  });
-                });
-              </script>
-              <!-- End Radar CHart -->
+              <!-- Floating Labels Form -->
+              <form class="row g-3">
+                <div class="col-md-12">
+                  <div class="form-floating">
+                    <input type="text" class="form-control" id="floatingName" placeholder="Your Name">
+                    <label for="floatingName">Your Name</label>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-floating">
+                    <input type="email" class="form-control" id="floatingEmail" placeholder="Your Email">
+                    <label for="floatingEmail">Your Email</label>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-floating">
+                    <input type="password" class="form-control" id="floatingPassword" placeholder="Password">
+                    <label for="floatingPassword">Password</label>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="form-floating">
+                    <textarea class="form-control" placeholder="Address" id="floatingTextarea" style="height: 100px;"></textarea>
+                    <label for="floatingTextarea">Address</label>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="col-md-12">
+                    <div class="form-floating">
+                      <input type="text" class="form-control" id="floatingCity" placeholder="City">
+                      <label for="floatingCity">City</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="form-floating mb-3">
+                    <select class="form-select" id="floatingSelect" aria-label="State">
+                      <option selected>New York</option>
+                      <option value="1">Oregon</option>
+                      <option value="2">DC</option>
+                    </select>
+                    <label for="floatingSelect">State</label>
+                  </div>
+                </div>
+                <div class="col-md-2">
+                  <div class="form-floating">
+                    <input type="text" class="form-control" id="floatingZip" placeholder="Zip">
+                    <label for="floatingZip">Zip</label>
+                  </div>
+                </div>
+                <div class="text-center">
+                  <button type="submit" class="btn btn-primary">Submit</button>
+                  <button type="reset" class="btn btn-secondary">Reset</button>
+                </div>
+              </form><!-- End floating Labels Form -->
 
             </div>
           </div>
+
         </div>
-
-        <div class="col-lg-6">
-          <div class="card">
-            <div class="card-body">
-              <h5 class="card-title">Polar Area Chart</h5>
-
-              <!-- Polar Area Chart -->
-              <canvas id="polarAreaChart" style="max-height: 400px;"></canvas>
-              <script>
-                document.addEventListener("DOMContentLoaded", () => {
-                  new Chart(document.querySelector('#polarAreaChart'), {
-                    type: 'polarArea',
-                    data: {
-                      labels: [
-                        'Red',
-                        'Green',
-                        'Yellow',
-                        'Grey',
-                        'Blue'
-                      ],
-                      datasets: [{
-                        label: 'My First Dataset',
-                        data: [11, 16, 7, 3, 14],
-                        backgroundColor: [
-                          'rgb(255, 99, 132)',
-                          'rgb(75, 192, 192)',
-                          'rgb(255, 205, 86)',
-                          'rgb(201, 203, 207)',
-                          'rgb(54, 162, 235)'
-                        ]
-                      }]
-                    }
-                  });
-                });
-              </script>
-              <!-- End Polar Area Chart -->
-
-            </div>
-          </div>
-        </div>
-
-        <div class="col-lg-6">
-          <div class="card">
-            <div class="card-body">
-              <h5 class="card-title">Stacked Bar Chart</h5>
-
-              <!-- Stacked Bar Chart -->
-              <canvas id="stakedBarChart" style="max-height: 400px;"></canvas>
-              <script>
-                document.addEventListener("DOMContentLoaded", () => {
-                  new Chart(document.querySelector('#stakedBarChart'), {
-                    type: 'bar',
-                    data: {
-                      labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July'],
-                      datasets: [{
-                          label: 'Dataset 1',
-                          data: [-75, -15, 18, 48, 74],
-                          backgroundColor: 'rgb(255, 99, 132)',
-                        },
-                        {
-                          label: 'Dataset 2',
-                          data: [-11, -1, 12, 62, 95],
-                          backgroundColor: 'rgb(75, 192, 192)',
-                        },
-                        {
-                          label: 'Dataset 3',
-                          data: [-44, -5, 22, 35, 62],
-                          backgroundColor: 'rgb(255, 205, 86)',
-                        },
-                      ]
-                    },
-                    options: {
-                      plugins: {
-                        title: {
-                          display: true,
-                          text: 'Chart.js Bar Chart - Stacked'
-                        },
-                      },
-                      responsive: true,
-                      scales: {
-                        x: {
-                          stacked: true,
-                        },
-                        y: {
-                          stacked: true
-                        }
-                      }
-                    }
-                  });
-                });
-              </script>
-              <!-- End Stacked Bar Chart -->
-
-            </div>
-          </div>
-        </div>
-
-        <div class="col-lg-6">
-          <div class="card">
-            <div class="card-body">
-              <h5 class="card-title">Bubble Chart</h5>
-
-              <!-- Bubble Chart -->
-              <canvas id="bubbleChart" style="max-height: 400px;"></canvas>
-              <script>
-                document.addEventListener("DOMContentLoaded", () => {
-                  new Chart(document.querySelector('#bubbleChart'), {
-                    type: 'bubble',
-                    data: {
-                      labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July'],
-                      datasets: [{
-                          label: 'Dataset 1',
-                          data: [{
-                              x: 20,
-                              y: 30,
-                              r: 15
-                            },
-                            {
-                              x: 40,
-                              y: 10,
-                              r: 10
-                            },
-                            {
-                              x: 15,
-                              y: 37,
-                              r: 12
-                            },
-                            {
-                              x: 32,
-                              y: 42,
-                              r: 33
-                            }
-                          ],
-                          borderColor: 'rgb(255, 99, 132)',
-                          backgroundColor: 'rgba(255, 99, 132, 0.5)'
-                        },
-                        {
-                          label: 'Dataset 2',
-                          data: [{
-                              x: 40,
-                              y: 25,
-                              r: 22
-                            },
-                            {
-                              x: 24,
-                              y: 47,
-                              r: 11
-                            },
-                            {
-                              x: 65,
-                              y: 11,
-                              r: 14
-                            },
-                            {
-                              x: 11,
-                              y: 55,
-                              r: 8
-                            }
-                          ],
-                          borderColor: 'rgb(75, 192, 192)',
-                          backgroundColor: 'rgba(75, 192, 192, 0.5)'
-                        }
-                      ]
-                    },
-                    options: {
-                      responsive: true,
-                      plugins: {
-                        legend: {
-                          position: 'top',
-                        },
-                        title: {
-                          display: true,
-                          text: 'Chart.js Bubble Chart'
-                        }
-                      }
-                    }
-                  });
-                });
-              </script>
-              <!-- End Bubble Chart -->
-
-            </div>
-          </div>
-        </div>
-
       </div>
     </section>
 
