@@ -7,6 +7,7 @@ A web-based assessment system for incoming freshmen to determine their compatibi
 ### Student Features
 - Student registration
 - Dynamic assessment with timer
+- **Adaptive Assessment** - Questions adapt based on answers for better accuracy
 - Real-time compatibility score calculation
 - Course recommendation (IT, CS, or IS)
 
@@ -23,6 +24,7 @@ A web-based assessment system for incoming freshmen to determine their compatibi
 - XAMPP (or any PHP/MySQL server)
 - PHP 7.4 or higher
 - MySQL 5.7 or higher
+- Python 3.7+ (for adaptive assessment feature)
 
 ### Setup Steps
 
@@ -45,8 +47,27 @@ A web-based assessment system for incoming freshmen to determine their compatibi
      - Password: `admin123`
    - Login at: `login-admin.php`
 
-4. **Access the System**
+4. **Setup Adaptive Assessment (Required)**
+   - Navigate to `adaptive_algorithm` folder
+   - Install Python dependencies:
+     ```bash
+     pip install -r requirements.txt
+     ```
+   - Start the adaptive service:
+     ```bash
+     python adaptive_service.py
+     ```
+   - Or use the provided scripts:
+     - Windows: `start_service.bat`
+     - Linux/Mac: `chmod +x start_service.sh && ./start_service.sh`
+   - Test the service: `python test_service.py`
+   - The service runs on `http://localhost:5000`
+   - **Note**: If the adaptive service is unavailable, the system automatically falls back to regular assessment mode
+
+5. **Access the System**
    - Student registration: `register.php`
+   - Disclosure page: `client/disclosure.php?id=<student_id>` (shown after registration)
+   - Assessment: `client/assessment_adaptive.php?id=<student_id>` (after disclosure)
    - Admin dashboard: `admin/homepage.php` (after login)
 
 ## File Structure
@@ -116,13 +137,25 @@ kasUbAyTech/
 1. **Register**
    - Go to `register.php`
    - Enter first name, middle name, and last name
-   - Submit to start assessment
+   - Click "Start Assessment" to submit registration
 
-2. **Take Assessment**
+2. **Read Disclosure Page**
+   - After registration, you'll see an information page explaining:
+     - What the assessment is composed of
+     - How it guides course selection
+     - System introduction and features
+     - Important notes and guidelines
+   - Review the information carefully
+   - Click "Start Assessment" when ready
+
+3. **Take Assessment**
+   - The assessment uses an adaptive algorithm that selects questions based on your answers
    - Answer questions one by one
    - Each question has a 60-second timer
    - Questions can be single or multiple choice
-   - Submit when finished
+   - Current compatibility scores are displayed as you progress
+   - The system automatically selects the most informative next question
+   - Submit when finished (or when all questions are answered)
 
 3. **View Results**
    - After submission, view compatibility scores
@@ -144,6 +177,25 @@ The system calculates compatibility scores based on:
 - XSS protection using htmlspecialchars
 - Session-based authentication for admin panel
 
+## Adaptive Assessment
+
+The adaptive algorithm dynamically selects the next question based on:
+- **Current compatibility scores**: Tracks IT, CS, IS scores in real-time
+- **Question utility**: Selects questions that best distinguish between courses
+- **Variance analysis**: Prioritizes informative questions
+
+### How It Works
+1. Student answers a question
+2. System calculates current compatibility scores
+3. Algorithm evaluates all unanswered questions
+4. Selects the most informative next question
+5. Process repeats until assessment is complete
+
+### Benefits
+- **More Accurate**: Better distinguishes between similar courses
+- **Efficient**: May require fewer questions
+- **Personalized**: Adapts to each student's responses
+
 ## Customization
 
 ### Adding More Questions
@@ -156,6 +208,7 @@ The system calculates compatibility scores based on:
 - Edit existing questions
 - Modify IT, CS, and IS scores for each option
 - Higher scores indicate better compatibility
+- For adaptive assessment, questions with high variance between courses are prioritized
 
 ## Troubleshooting
 
@@ -172,6 +225,24 @@ The system calculates compatibility scores based on:
 - Default password is `admin123`
 - Check database for admin user
 - Verify session is enabled in PHP
+
+### Adaptive Service Not Working
+- **Check if service is running:**
+  ```bash
+  cd adaptive_algorithm
+  python check_service.py
+  ```
+- **If not running, start it:**
+  ```bash
+  python adaptive_service.py
+  ```
+- **Check if port 5000 is available:**
+  - Windows: `netstat -an | findstr 5000`
+  - Linux/Mac: `lsof -i :5000`
+- **Verify database connection in `adaptive_service.py`**
+- **Test the service:** `python test_service.py`
+- **Quick browser check:** Open `http://localhost:5000/health`
+- If service fails, students automatically fall back to regular assessment mode
 
 ## License
 

@@ -14,7 +14,8 @@ if (isset($_POST['register']) && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $lastid = $stmt->insert_id;
        
-       header("Location: assessment.php?id=$lastid");
+       // Redirect to disclosure page first
+       header("Location: disclosure.php?id=$lastid");
        exit();
    } else {
        echo "Error: " . $sql . "<br>" . mysqli_error($conn);
