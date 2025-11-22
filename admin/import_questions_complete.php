@@ -34,18 +34,32 @@ function createQuestionWithOptions($conn, $category, $topic, $questionText, $ord
     $questionId = $stmt->insert_id;
     $stmt->close();
     
-    // Insert options
+    // Insert options - ensure each option is unique
     $optionStmt = $conn->prepare("INSERT INTO answer_options (question_id, option_text, it_score, cs_score, is_score) VALUES (?, ?, ?, ?, ?)");
     $correctOptionId = null;
+    $seenTexts = []; // Track option texts to prevent duplicates
     
     foreach ($options as $index => $option) {
-        $optionText = $option['text'];
-        $itScore = $option['it_score'];
-        $csScore = $option['cs_score'];
-        $isScore = $option['is_score'];
+        $optionText = trim($option['text']);
+        $itScore = floatval($option['it_score']);
+        $csScore = floatval($option['cs_score']);
+        $isScore = floatval($option['is_score']);
         
+        // Skip if this option text was already used for this question
+        if (in_array($optionText, $seenTexts)) {
+            echo "Warning: Duplicate option text '{$optionText}' skipped for question {$questionId}\n";
+            continue;
+        }
+        
+        $seenTexts[] = $optionText;
+        
+        // Reset bind parameters for each iteration
         $optionStmt->bind_param("isddd", $questionId, $optionText, $itScore, $csScore, $isScore);
-        $optionStmt->execute();
+        
+        if (!$optionStmt->execute()) {
+            echo "Error inserting option: " . $optionStmt->error . "\n";
+            continue;
+        }
         
         if ($index == $correctIndex) {
             $correctOptionId = $optionStmt->insert_id;
@@ -285,17 +299,72 @@ try {
         $question = $qData['question'];
         $correctIndex = $qData['correct'];
         
-        // Prepare options with scores
+        // Prepare options with scores - validate and ensure uniqueness
         $options = [];
+        $optionTexts = [];
+        
         foreach ($qData['options'] as $index => $opt) {
+            $optionText = trim($opt['text']);
+            
+            // Skip empty options
+            if (empty($optionText)) {
+                echo "Warning: Empty option text at index {$index} for question: {$question}\n";
+                continue;
+            }
+            
+            // Check for duplicates in the source data
+            if (in_array($optionText, $optionTexts)) {
+                echo "Warning: Duplicate option '{$optionText}' in source data for question: {$question}\n";
+                // Still add it but with a note
+            }
+            
+            $optionTexts[] = $optionText;
             $isCorrect = ($index == $correctIndex);
             $scores = getScores($category, $isCorrect);
+            
             $options[] = [
-                'text' => $opt['text'],
+                'text' => $optionText,
                 'it_score' => $scores['it_score'],
                 'cs_score' => $scores['cs_score'],
                 'is_score' => $scores['is_score'],
             ];
+        }
+        
+        // Ensure we have at least 2 options (minimum for a valid question)
+        if (count($options) < 2) {
+            echo "Error: Question has less than 2 options, skipping: {$question}\n";
+            continue;
+        }
+        
+        // Update correctIndex if it's out of bounds after filtering
+        // Need to find the correct option by text if index changed
+        $originalCorrectText = isset($qData['options'][$correctIndex]['text']) ? trim($qData['options'][$correctIndex]['text']) : null;
+        if ($originalCorrectText) {
+            // Find the correct option in the filtered options array
+            $newCorrectIndex = null;
+            foreach ($options as $idx => $opt) {
+                if (trim($opt['text']) === $originalCorrectText) {
+                    $newCorrectIndex = $idx;
+                    break;
+                }
+            }
+            if ($newCorrectIndex !== null) {
+                $correctIndex = $newCorrectIndex;
+            } else {
+                echo "Warning: Could not find correct answer text in filtered options, using first option for question: {$question}\n";
+                $correctIndex = 0;
+            }
+        } else if ($correctIndex >= count($options)) {
+            echo "Warning: Correct index {$correctIndex} is out of bounds, setting to 0 for question: {$question}\n";
+            $correctIndex = 0;
+        }
+        
+        // Debug: Check for duplicate option texts before insertion
+        $optionTextsForDebug = array_column($options, 'text');
+        $uniqueTexts = array_unique($optionTextsForDebug);
+        if (count($optionTextsForDebug) !== count($uniqueTexts)) {
+            echo "Warning: Question #{$orderNum} has duplicate option texts: {$question}\n";
+            echo "  Options: " . implode(' | ', $optionTextsForDebug) . "\n";
         }
         
         $questionId = createQuestionWithOptions($conn, $category, $topic, $question, $orderNum++, $options, $correctIndex);
@@ -304,6 +373,8 @@ try {
             if ($imported % 10 == 0) {
                 echo "Imported $imported questions...\n";
             }
+        } else {
+            echo "Failed to import question: {$question}\n";
         }
     }
     
