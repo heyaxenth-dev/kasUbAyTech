@@ -213,8 +213,21 @@ def select_next_question(answered_questions: List[Dict],
         cursor.execute(query)
         all_question_ids = [row['id'] for row in cursor.fetchall()]
     
-    # Get answered question IDs
-    answered_ids = [q['question_id'] for q in answered_questions]
+    # Get answered question IDs - ensure they're integers for comparison
+    answered_ids = []
+    for q in answered_questions:
+        qid = q.get('question_id')
+        if qid is not None:
+            # Convert to int to ensure type consistency
+            answered_ids.append(int(qid))
+    
+    # Ensure all_question_ids are also integers
+    if all_question_ids:
+        all_question_ids = [int(qid) for qid in all_question_ids]
+    
+    print(f"Inside select_next_question:")
+    print(f"  Answered question IDs (as ints): {answered_ids}")
+    print(f"  All question IDs (as ints): {all_question_ids}")
     
     # Calculate current scores
     current_scores = calculate_current_scores(answered_questions)
@@ -222,9 +235,12 @@ def select_next_question(answered_questions: List[Dict],
     # Calculate utility for each unanswered question
     question_utilities = []
     for qid in all_question_ids:
-        if qid not in answered_ids:
-            utility = calculate_question_utility(qid, current_scores, answered_ids)
-            question_utilities.append((qid, utility))
+        qid_int = int(qid)  # Ensure integer type
+        if qid_int not in answered_ids:
+            utility = calculate_question_utility(qid_int, current_scores, answered_ids)
+            question_utilities.append((qid_int, utility))
+        else:
+            print(f"  Skipping question {qid_int} (already answered)")
     
     if not question_utilities:
         cursor.close()
@@ -362,20 +378,33 @@ def get_next_question():
         answered_questions = data.get('answered_questions', [])
         all_question_ids = data.get('all_question_ids', None)
         
+        print(f"\n=== get_next_question called ===")
+        print(f"Received answered_questions: {answered_questions}")
+        print(f"Number of answered questions: {len(answered_questions)}")
+        if answered_questions:
+            answered_ids = [q.get('question_id') for q in answered_questions]
+            print(f"Answered question IDs: {answered_ids}")
+        print(f"All question IDs: {all_question_ids}")
+        
         next_question = select_next_question(answered_questions, all_question_ids)
         
         if next_question:
+            print(f"Returning question ID: {next_question.get('question_id')}")
             return jsonify({
                 'success': True,
                 'question': next_question
             })
         else:
+            print("No more questions available")
             return jsonify({
                 'success': False,
                 'message': 'No more questions available'
             })
     
     except Exception as e:
+        print(f"Error in get_next_question: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)

@@ -188,6 +188,10 @@ $adaptive_service_url = 'http://localhost:5000';
                             document.getElementById('questionContainer').innerHTML =
                                 '<div class="text-center"><div class="spinner-border" role="status"></div><p class="mt-2">Loading next question...</p></div>';
 
+                            console.log('Loading next question...');
+                            console.log('Answered questions so far:', answeredQuestions);
+                            console.log('Answered question IDs:', answeredQuestions.map(q => q.question_id));
+
                             fetch(adaptiveServiceUrl + '/get_next_question', {
                                     method: 'POST',
                                     headers: {
@@ -212,6 +216,17 @@ $adaptive_service_url = 'http://localhost:5000';
                                     console.log('Has question:', data.hasOwnProperty('question'));
                                     
                                     if (data.success && data.question) {
+                                        const nextQuestionId = data.question.question_id;
+                                        
+                                        // Check if this question was already answered
+                                        const alreadyAnswered = answeredQuestions.some(q => q.question_id === nextQuestionId);
+                                        if (alreadyAnswered) {
+                                            console.warn(`Question ${nextQuestionId} was already answered, skipping...`);
+                                            // Skip this question and load next one
+                                            loadNextQuestion();
+                                            return;
+                                        }
+                                        
                                         console.log('Question data:', data.question);
                                         displayQuestion(data.question);
                                         updateProgress();
