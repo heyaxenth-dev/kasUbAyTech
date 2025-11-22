@@ -228,6 +228,10 @@ def get_category_performance(answered_questions: List[Dict], conn) -> Dict[str, 
             continue
             
         category = question.get('category', 'DIAGNOSTIC')
+        # Handle None or invalid category
+        if category not in category_stats:
+            category = 'DIAGNOSTIC'
+        
         correct_option_id = question.get('is_correct_answer')
         
         category_stats[category]['total'] += 1
@@ -278,72 +282,100 @@ def select_next_question(answered_questions: List[Dict],
     print(f"Inside select_next_question:")
     print(f"  Answered question IDs: {answered_ids}")
     
-    # Get category performance
-    category_perf = get_category_performance(answered_questions, conn)
-    print(f"  Category performance: {category_perf}")
+    # Check if category column exists (for backward compatibility)
+    try:
+        cursor.execute("SHOW COLUMNS FROM questions LIKE 'category'")
+        has_category = cursor.fetchone() is not None
+    except:
+        has_category = False
     
-    # Strategy: 
-    # 1. Start with DIAGNOSTIC questions (first 3 questions)
-    # 2. If wrong answers in a category, shift to that category to test knowledge
-    # 3. Otherwise, continue with highest utility questions
+    next_question_id = None
     
-    # Check if we should start with diagnostic questions
-    diagnostic_count = category_perf['DIAGNOSTIC']['total']
-    if diagnostic_count < 3:
-        # Get next diagnostic question
-        query = """
-            SELECT id FROM questions 
-            WHERE category = 'DIAGNOSTIC' AND is_active = 1 AND id NOT IN (%s)
-            ORDER BY order_number, id
-            LIMIT 1
-        """
-        placeholders = ','.join(['%s'] * len(answered_ids)) if answered_ids else '0'
-        cursor.execute(query % placeholders, answered_ids if answered_ids else [])
-        diagnostic_q = cursor.fetchone()
+    if has_category:
+        # Get category performance
+        category_perf = get_category_performance(answered_questions, conn)
+        print(f"  Category performance: {category_perf}")
         
-        if diagnostic_q:
-            next_question_id = diagnostic_q['id']
-            print(f"  Selecting diagnostic question: {next_question_id}")
+        # Strategy: 
+        # 1. Start with DIAGNOSTIC questions (first 3 questions)
+        # 2. If wrong answers in a category, shift to that category to test knowledge
+        # 3. Otherwise, continue with highest utility questions
+        
+        # Check if we should start with diagnostic questions
+        diagnostic_count = category_perf['DIAGNOSTIC']['total']
+        
+        if diagnostic_count < 3:
+            # Get next diagnostic question
+            try:
+                if answered_ids:
+                    query = """
+                        SELECT id FROM questions 
+                        WHERE category = 'DIAGNOSTIC' AND is_active = 1 AND id NOT IN ({})
+                        ORDER BY order_number, id
+                        LIMIT 1
+                    """.format(','.join(['%s'] * len(answered_ids)))
+                    cursor.execute(query, answered_ids)
+                else:
+                    query = """
+                        SELECT id FROM questions 
+                        WHERE category = 'DIAGNOSTIC' AND is_active = 1
+                        ORDER BY order_number, id
+                        LIMIT 1
+                    """
+                    cursor.execute(query)
+                
+                diagnostic_q = cursor.fetchone()
+                
+                if diagnostic_q:
+                    next_question_id = diagnostic_q['id']
+                    print(f"  Selecting diagnostic question: {next_question_id}")
+            except Exception as e:
+                print(f"  Error selecting diagnostic question: {e}")
+                # Fall through to utility-based selection
         else:
-            # No more diagnostic questions, proceed with adaptive selection
-            diagnostic_count = 3  # Force to proceed
-    else:
-        # After diagnostic questions, use adaptive strategy
-        # Find categories with wrong answers that need testing
-        categories_to_test = []
-        for cat in ['IS', 'IT', 'CS']:
-            if category_perf[cat]['total'] > 0:
-                wrong_ratio = category_perf[cat]['wrong'] / category_perf[cat]['total']
-                if wrong_ratio > 0.3:  # More than 30% wrong, need to test more
-                    categories_to_test.append((cat, wrong_ratio))
-        
-        # Sort by wrong ratio (highest first)
-        categories_to_test.sort(key=lambda x: x[1], reverse=True)
-        
-        if categories_to_test:
-            # Test the category with most wrong answers
-            target_category = categories_to_test[0][0]
-            print(f"  Shifting to {target_category} category due to wrong answers")
+            # After diagnostic questions, use adaptive strategy
+            # Find categories with wrong answers that need testing
+            categories_to_test = []
+            for cat in ['IS', 'IT', 'CS']:
+                if category_perf[cat]['total'] > 0:
+                    wrong_ratio = category_perf[cat]['wrong'] / category_perf[cat]['total']
+                    if wrong_ratio > 0.3:  # More than 30% wrong, need to test more
+                        categories_to_test.append((cat, wrong_ratio))
             
-            query = """
-                SELECT id FROM questions 
-                WHERE category = %s AND is_active = 1 AND id NOT IN (%s)
-                ORDER BY order_number, id
-                LIMIT 1
-            """
-            placeholders = ','.join(['%s'] * len(answered_ids)) if answered_ids else '0'
-            params = [target_category] + (answered_ids if answered_ids else [0])
-            cursor.execute(query % placeholders, params)
-            category_q = cursor.fetchone()
+            # Sort by wrong ratio (highest first)
+            categories_to_test.sort(key=lambda x: x[1], reverse=True)
             
-            if category_q:
-                next_question_id = category_q['id']
-            else:
-                # No more questions in this category, use utility-based selection
-                next_question_id = None
-        else:
-            # No category needs special testing, use utility-based selection
-            next_question_id = None
+            if categories_to_test:
+                # Test the category with most wrong answers
+                target_category = categories_to_test[0][0]
+                print(f"  Shifting to {target_category} category due to wrong answers")
+                
+                try:
+                    if answered_ids:
+                        query = """
+                            SELECT id FROM questions 
+                            WHERE category = %s AND is_active = 1 AND id NOT IN ({})
+                            ORDER BY order_number, id
+                            LIMIT 1
+                        """.format(','.join(['%s'] * len(answered_ids)))
+                        params = [target_category] + answered_ids
+                        cursor.execute(query, params)
+                    else:
+                        query = """
+                            SELECT id FROM questions 
+                            WHERE category = %s AND is_active = 1
+                            ORDER BY order_number, id
+                            LIMIT 1
+                        """
+                        cursor.execute(query, (target_category,))
+                    
+                    category_q = cursor.fetchone()
+                    
+                    if category_q:
+                        next_question_id = category_q['id']
+                except Exception as e:
+                    print(f"  Error selecting category question: {e}")
+                    # Fall through to utility-based selection
     
     # If no specific question selected, use utility-based selection
     if not next_question_id:

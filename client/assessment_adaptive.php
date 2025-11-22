@@ -93,17 +93,6 @@ $adaptive_service_url = 'http://localhost:5000';
                                     <p class="text-center small">Questions will adapt based on your answers for better
                                         accuracy</p>
 
-                                    <!-- Progress Indicator -->
-                                    <div class="mb-3">
-                                        <div class="d-flex justify-content-between mb-1">
-                                            <small>Progress</small>
-                                            <small id="progressText">0 / 0</small>
-                                        </div>
-                                        <div class="progress">
-                                            <div class="progress-bar" id="progressBar" role="progressbar"
-                                                style="width: 0%"></div>
-                                        </div>
-                                    </div>
 
                                     <!-- Current Scores Display -->
                                     <div id="currentScores" class="mb-3 d-none">
@@ -229,7 +218,6 @@ $adaptive_service_url = 'http://localhost:5000';
                                         
                                         console.log('Question data:', data.question);
                                         displayQuestion(data.question);
-                                        updateProgress();
                                         startTimer();
                                     } else {
                                         console.log('No more questions or invalid response:', data);
@@ -436,11 +424,7 @@ $adaptive_service_url = 'http://localhost:5000';
                         }
 
                         function updateProgress() {
-                            totalQuestions = Math.max(totalQuestions, answeredCount + 1);
-                            const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
-                            document.getElementById('progressBar').style.width = progress + '%';
-                            document.getElementById('progressText').textContent =
-                                `${answeredCount} / ${totalQuestions}`;
+                            // Progress bar removed - no action needed
                         }
 
                         function startTimer() {
