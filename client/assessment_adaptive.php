@@ -198,92 +198,156 @@ $adaptive_service_url = 'http://localhost:5000';
                                         all_question_ids: allQuestionIds
                                     })
                                 })
-                                .then(response => response.json())
+                                .then(response => {
+                                    console.log('Response status:', response.status);
+                                    if (!response.ok) {
+                                        throw new Error(`HTTP error! status: ${response.status}`);
+                                    }
+                                    return response.json();
+                                })
                                 .then(data => {
                                     console.log('Response from adaptive service:', data);
+                                    console.log('Response data type:', typeof data);
+                                    console.log('Has success:', data.hasOwnProperty('success'));
+                                    console.log('Has question:', data.hasOwnProperty('question'));
+                                    
                                     if (data.success && data.question) {
+                                        console.log('Question data:', data.question);
                                         displayQuestion(data.question);
                                         updateProgress();
                                         startTimer();
                                     } else {
+                                        console.log('No more questions or invalid response:', data);
                                         // No more questions, submit assessment
                                         submitAssessment(false);
                                     }
                                 })
                                 .catch(error => {
-                                    console.error('Error:', error);
-                                    // Fallback: try regular assessment
-                                    console.log('Adaptive service unavailable, trying regular assessment...');
-                                    // Load questions from database directly
-                                    loadRegularAssessment();
+                                    console.error('Error loading question:', error);
+                                    const container = document.getElementById('questionContainer');
+                                    container.innerHTML = `
+                                        <div class="alert alert-danger">
+                                            <h6>Error Loading Question</h6>
+                                            <p>Unable to connect to the assessment service. Please check your connection and try again.</p>
+                                            <button type="button" class="btn btn-primary" onclick="loadNextQuestion()">Retry</button>
+                                            <a href="../index.php" class="btn btn-secondary">Return to Home</a>
+                                        </div>
+                                    `;
                                 });
                         }
 
                         function displayQuestion(question) {
-                            currentQuestion = question;
-                            const container = document.getElementById('questionContainer');
+                            try {
+                                currentQuestion = question;
+                                const container = document.getElementById('questionContainer');
 
-                            // Debug: Log question data
-                            console.log('Displaying question:', question);
+                                // Debug: Log question data
+                                console.log('Displaying question:', question);
+                                console.log('Question options:', question.options);
+                                console.log('Options type:', typeof question.options, 'Is array:', Array.isArray(question.options));
 
-                            // Check if question has options
-                            if (!question.options || !Array.isArray(question.options) || question.options.length ===
-                                0) {
-                                container.innerHTML = `
-                                    <div class="alert alert-warning">
-                                        <h6>Error loading question options</h6>
-                                        <p>Please refresh the page or contact support if this issue persists.</p>
-                                        <button type="button" class="btn btn-primary" onclick="loadNextQuestion()">Retry</button>
-                                    </div>
+                                // Check if question exists
+                                if (!question) {
+                                    console.error('Question is null or undefined');
+                                    container.innerHTML = `
+                                        <div class="alert alert-warning">
+                                            <h6>Error loading question</h6>
+                                            <p>Question data is missing. Please try again.</p>
+                                            <button type="button" class="btn btn-primary" onclick="loadNextQuestion()">Retry</button>
+                                        </div>
+                                    `;
+                                    return;
+                                }
+
+                                // Check if question has options
+                                if (!question.options || !Array.isArray(question.options) || question.options.length === 0) {
+                                    console.error('Question has no valid options:', {
+                                        hasOptions: !!question.options,
+                                        isArray: Array.isArray(question.options),
+                                        length: question.options ? question.options.length : 0,
+                                        options: question.options
+                                    });
+                                    container.innerHTML = `
+                                        <div class="alert alert-warning">
+                                            <h6>Error loading question options</h6>
+                                            <p>This question has no available options. Please contact support.</p>
+                                            <button type="button" class="btn btn-primary" onclick="loadNextQuestion()">Skip Question</button>
+                                        </div>
+                                    `;
+                                    return;
+                                }
+
+                                const isMultiple = question.question_type === 'multiple';
+                                const inputType = isMultiple ? 'checkbox' : 'radio';
+                                const inputName = isMultiple ? `q${question.question_id}[]` : `q${question.question_id}`;
+
+                                let html = `
+                                    <div class="question" id="question${question.question_id}">
+                                        <h6 class="mb-3">${answeredCount + 1}. ${question.question_text || 'Question'}</h6>
                                 `;
-                                return;
-                            }
 
-                            const isMultiple = question.question_type === 'multiple';
-                            const inputType = isMultiple ? 'checkbox' : 'radio';
-                            const inputName = isMultiple ? `q${question.question_id}[]` : `q${question.question_id}`;
+                                let validOptionsCount = 0;
+                                question.options.forEach((option, index) => {
+                                    // Ensure option has required properties
+                                    if (!option || option.id === undefined || option.id === null || !option.option_text) {
+                                        console.warn('Invalid option at index', index, ':', option);
+                                        return;
+                                    }
 
-                            let html = `
-                                <div class="question" id="question${question.question_id}">
-                                    <h6 class="mb-3">${answeredCount + 1}. ${question.question_text}</h6>
-                            `;
+                                    validOptionsCount++;
+                                    html += `
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="${inputType}" 
+                                                name="${inputName}" 
+                                                id="q${question.question_id}_opt${option.id}"
+                                                value="${option.id}" 
+                                                ${!isMultiple ? 'required' : ''}>
+                                            <label class="form-check-label" for="q${question.question_id}_opt${option.id}">
+                                                ${option.option_text}
+                                            </label>
+                                        </div>
+                                    `;
+                                });
 
-                            question.options.forEach((option, index) => {
-                                // Ensure option has required properties
-                                if (!option || !option.id || !option.option_text) {
-                                    console.warn('Invalid option:', option);
+                                if (validOptionsCount === 0) {
+                                    console.error('No valid options found after filtering');
+                                    container.innerHTML = `
+                                        <div class="alert alert-warning">
+                                            <h6>Error loading question options</h6>
+                                            <p>No valid answer options found for this question.</p>
+                                            <button type="button" class="btn btn-primary" onclick="loadNextQuestion()">Skip Question</button>
+                                        </div>
+                                    `;
                                     return;
                                 }
 
                                 html += `
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="${inputType}" 
-                                            name="${inputName}" 
-                                            id="q${question.question_id}_opt${option.id}"
-                                            value="${option.id}" 
-                                            ${!isMultiple ? 'required' : ''}>
-                                        <label class="form-check-label" for="q${question.question_id}_opt${option.id}">
-                                            ${option.option_text}
-                                        </label>
+                                        <button type="button" class="btn btn-primary w-100 mt-3" onclick="submitAnswer()">
+                                            Next Question
+                                        </button>
                                     </div>
                                 `;
-                            });
 
-                            html += `
-                                    <button type="button" class="btn btn-primary w-100 mt-3" onclick="submitAnswer()">
-                                        Next Question
-                                    </button>
-                                </div>
-                            `;
+                                container.innerHTML = html;
+                                console.log('Question HTML rendered successfully');
 
-                            container.innerHTML = html;
-
-                            // Update current scores display
-                            if (question.current_scores) {
-                                document.getElementById('currentScores').classList.remove('d-none');
-                                document.getElementById('scoreIT').textContent = question.current_scores.IT + '%';
-                                document.getElementById('scoreCS').textContent = question.current_scores.CS + '%';
-                                document.getElementById('scoreIS').textContent = question.current_scores.IS + '%';
+                                // Update current scores display
+                                if (question.current_scores) {
+                                    document.getElementById('currentScores').classList.remove('d-none');
+                                    document.getElementById('scoreIT').textContent = (question.current_scores.IT || 0) + '%';
+                                    document.getElementById('scoreCS').textContent = (question.current_scores.CS || 0) + '%';
+                                    document.getElementById('scoreIS').textContent = (question.current_scores.IS || 0) + '%';
+                                }
+                            } catch (error) {
+                                console.error('Error in displayQuestion:', error);
+                                const container = document.getElementById('questionContainer');
+                                container.innerHTML = `
+                                    <div class="alert alert-danger">
+                                        <h6>Error Displaying Question</h6>
+                                        <p>An error occurred while displaying the question: ${error.message}</p>
+                                        <button type="button" class="btn btn-primary" onclick="loadNextQuestion()">Retry</button>
+                                    </div>
+                                `;
                             }
                         }
 
