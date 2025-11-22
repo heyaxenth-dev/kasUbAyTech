@@ -27,7 +27,7 @@ while ($row = $questions_result->fetch_assoc()) {
 $conn->close();
 
 // Adaptive service URL
-$adaptive_service_url = 'http://127.0.0.1:5000'; // Update if needed
+$adaptive_service_url = 'http://localhost:5000';
 ?>
 
 <!DOCTYPE html>
@@ -339,7 +339,7 @@ $adaptive_service_url = 'http://127.0.0.1:5000'; // Update if needed
                             if (currentQuestion) {
                                 const inputs = document.querySelectorAll(
                                     `input[name="q${currentQuestion.question_id}"], input[name="q${currentQuestion.question_id}[]"]:checked`
-                                );
+                                    );
                                 const selectedOptions = Array.from(inputs)
                                     .filter(input => input.checked)
                                     .map(input => parseInt(input.value));
