@@ -27,7 +27,7 @@ while ($row = $questions_result->fetch_assoc()) {
 $conn->close();
 
 // Adaptive service URL
-$adaptive_service_url = 'http://localhost:5000';
+$adaptive_service_url = 'http://127.0.0.1:5000'; // Update if needed
 ?>
 
 <!DOCTYPE html>
@@ -87,8 +87,11 @@ $adaptive_service_url = 'http://localhost:5000';
 
                                 <div class="card-body" id="quizCard">
                                     <h5 class="card-title text-center pb-0 fs-4">Course Compatibility Assessment</h5>
-                                    <p class="text-center small">Welcome, <?php echo htmlspecialchars($client['firstname'] . ' ' . $client['lastname']); ?></p>
-                                    <p class="text-center small">Questions will adapt based on your answers for better accuracy</p>
+                                    <p class="text-center small">Welcome,
+                                        <?php echo htmlspecialchars($client['firstname'] . ' ' . $client['lastname']); ?>
+                                    </p>
+                                    <p class="text-center small">Questions will adapt based on your answers for better
+                                        accuracy</p>
 
                                     <!-- Progress Indicator -->
                                     <div class="mb-3">
@@ -97,7 +100,8 @@ $adaptive_service_url = 'http://localhost:5000';
                                             <small id="progressText">0 / 0</small>
                                         </div>
                                         <div class="progress">
-                                            <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
+                                            <div class="progress-bar" id="progressBar" role="progressbar"
+                                                style="width: 0%"></div>
                                         </div>
                                     </div>
 
@@ -142,6 +146,7 @@ $adaptive_service_url = 'http://localhost:5000';
                                 transform: translateX(0);
                                 opacity: 1;
                             }
+
                             to {
                                 transform: translateX(-100%);
                                 opacity: 0;
@@ -153,6 +158,7 @@ $adaptive_service_url = 'http://localhost:5000';
                                 transform: translateX(100%);
                                 opacity: 0;
                             }
+
                             to {
                                 transform: translateX(0);
                                 opacity: 1;
@@ -164,7 +170,7 @@ $adaptive_service_url = 'http://localhost:5000';
                         const clientId = <?php echo $reference_id; ?>;
                         const adaptiveServiceUrl = '<?php echo $adaptive_service_url; ?>';
                         const allQuestionIds = <?php echo json_encode($all_question_ids); ?>;
-                        
+
                         let answeredQuestions = [];
                         let currentQuestion = null;
                         let timerInterval;
@@ -179,49 +185,50 @@ $adaptive_service_url = 'http://localhost:5000';
 
                         function loadNextQuestion() {
                             // Show loading
-                            document.getElementById('questionContainer').innerHTML = 
+                            document.getElementById('questionContainer').innerHTML =
                                 '<div class="text-center"><div class="spinner-border" role="status"></div><p class="mt-2">Loading next question...</p></div>';
 
                             fetch(adaptiveServiceUrl + '/get_next_question', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    answered_questions: answeredQuestions,
-                                    all_question_ids: allQuestionIds
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({
+                                        answered_questions: answeredQuestions,
+                                        all_question_ids: allQuestionIds
+                                    })
                                 })
-                            })
-                            .then(response => response.json())
-                            .then(data => {
-                                console.log('Response from adaptive service:', data);
-                                if (data.success && data.question) {
-                                    displayQuestion(data.question);
-                                    updateProgress();
-                                    startTimer();
-                                } else {
-                                    // No more questions, submit assessment
-                                    submitAssessment(false);
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Error:', error);
-                                // Fallback: try regular assessment
-                                console.log('Adaptive service unavailable, trying regular assessment...');
-                                // Load questions from database directly
-                                loadRegularAssessment();
-                            });
+                                .then(response => response.json())
+                                .then(data => {
+                                    console.log('Response from adaptive service:', data);
+                                    if (data.success && data.question) {
+                                        displayQuestion(data.question);
+                                        updateProgress();
+                                        startTimer();
+                                    } else {
+                                        // No more questions, submit assessment
+                                        submitAssessment(false);
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error:', error);
+                                    // Fallback: try regular assessment
+                                    console.log('Adaptive service unavailable, trying regular assessment...');
+                                    // Load questions from database directly
+                                    loadRegularAssessment();
+                                });
                         }
 
                         function displayQuestion(question) {
                             currentQuestion = question;
                             const container = document.getElementById('questionContainer');
-                            
+
                             // Debug: Log question data
                             console.log('Displaying question:', question);
-                            
+
                             // Check if question has options
-                            if (!question.options || !Array.isArray(question.options) || question.options.length === 0) {
+                            if (!question.options || !Array.isArray(question.options) || question.options.length ===
+                                0) {
                                 container.innerHTML = `
                                     <div class="alert alert-warning">
                                         <h6>Error loading question options</h6>
@@ -231,7 +238,7 @@ $adaptive_service_url = 'http://localhost:5000';
                                 `;
                                 return;
                             }
-                            
+
                             const isMultiple = question.question_type === 'multiple';
                             const inputType = isMultiple ? 'checkbox' : 'radio';
                             const inputName = isMultiple ? `q${question.question_id}[]` : `q${question.question_id}`;
@@ -247,7 +254,7 @@ $adaptive_service_url = 'http://localhost:5000';
                                     console.warn('Invalid option:', option);
                                     return;
                                 }
-                                
+
                                 html += `
                                     <div class="form-check mb-2">
                                         <input class="form-check-input" type="${inputType}" 
@@ -284,8 +291,9 @@ $adaptive_service_url = 'http://localhost:5000';
                             if (!currentQuestion) return;
 
                             const questionId = currentQuestion.question_id;
-                            const inputs = document.querySelectorAll(`input[name="q${questionId}"], input[name="q${questionId}[]"]:checked`);
-                            
+                            const inputs = document.querySelectorAll(
+                                `input[name="q${questionId}"], input[name="q${questionId}[]"]:checked`);
+
                             const selectedOptions = Array.from(inputs)
                                 .filter(input => input.checked)
                                 .map(input => parseInt(input.value));
@@ -311,27 +319,31 @@ $adaptive_service_url = 'http://localhost:5000';
                             container.addEventListener('animationend', function handler() {
                                 container.classList.remove('slide-out-left');
                                 container.classList.add('slide-in-right');
-                                
+
                                 setTimeout(() => {
                                     container.classList.remove('slide-in-right');
                                     loadNextQuestion();
                                 }, 400);
-                                
+
                                 container.removeEventListener('animationend', handler);
-                            }, { once: true });
+                            }, {
+                                once: true
+                            });
                         }
 
                         // Handle timer expiry - end assessment as unfinished
                         function handleTimerExpiry() {
                             clearInterval(timerInterval);
-                            
+
                             // If there's a current question and an answer is selected, save it first
                             if (currentQuestion) {
-                                const inputs = document.querySelectorAll(`input[name="q${currentQuestion.question_id}"], input[name="q${currentQuestion.question_id}[]"]:checked`);
+                                const inputs = document.querySelectorAll(
+                                    `input[name="q${currentQuestion.question_id}"], input[name="q${currentQuestion.question_id}[]"]:checked`
+                                );
                                 const selectedOptions = Array.from(inputs)
                                     .filter(input => input.checked)
                                     .map(input => parseInt(input.value));
-                                
+
                                 // Add current question to answered questions (even if no answer selected)
                                 answeredQuestions.push({
                                     question_id: currentQuestion.question_id,
@@ -339,7 +351,7 @@ $adaptive_service_url = 'http://localhost:5000';
                                 });
                                 answeredCount++;
                             }
-                            
+
                             // Submit assessment as unfinished
                             submitAssessmentUnfinished();
                         }
@@ -348,7 +360,8 @@ $adaptive_service_url = 'http://localhost:5000';
                             totalQuestions = Math.max(totalQuestions, answeredCount + 1);
                             const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
                             document.getElementById('progressBar').style.width = progress + '%';
-                            document.getElementById('progressText').textContent = `${answeredCount} / ${totalQuestions}`;
+                            document.getElementById('progressText').textContent =
+                                `${answeredCount} / ${totalQuestions}`;
                         }
 
                         function startTimer() {
@@ -374,9 +387,10 @@ $adaptive_service_url = 'http://localhost:5000';
 
                         function submitAssessment(isUnfinished = false) {
                             clearInterval(timerInterval);
-                            
+
                             const container = document.getElementById('questionContainer');
-                            container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div><p class="mt-3">Processing your results...</p></div>';
+                            container.innerHTML =
+                                '<div class="text-center"><div class="spinner-border" role="status"></div><p class="mt-3">Processing your results...</p></div>';
 
                             // Submit to PHP handler
                             const formData = new FormData();
@@ -387,14 +401,14 @@ $adaptive_service_url = 'http://localhost:5000';
                             }
 
                             fetch('submit_assessment.php', {
-                                method: 'POST',
-                                body: formData
-                            })
-                            .then(response => response.json())
-                            .then(data => {
-                                if (data.success) {
-                                    if (isUnfinished) {
-                                        container.innerHTML = `
+                                    method: 'POST',
+                                    body: formData
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        if (isUnfinished) {
+                                            container.innerHTML = `
                                             <div class="text-center">
                                                 <h5 class="mb-4 text-warning">⏱️ Time Expired</h5>
                                                 <div class="alert alert-warning mb-3">
@@ -440,8 +454,8 @@ $adaptive_service_url = 'http://localhost:5000';
                                                 <a href="../index.php" class="btn btn-primary">Return to Home</a>
                                             </div>
                                         `;
-                                    } else {
-                                        container.innerHTML = `
+                                        } else {
+                                            container.innerHTML = `
                                             <div class="text-center">
                                                 <h5 class="mb-4">🎉 Assessment Completed!</h5>
                                                 <h6 class="mb-3">Your Compatibility Scores:</h6>
@@ -477,29 +491,29 @@ $adaptive_service_url = 'http://localhost:5000';
                                                 <a href="../index.php" class="btn btn-primary">Return to Home</a>
                                             </div>
                                         `;
-                                    }
-                                } else {
-                                    container.innerHTML = `
+                                        }
+                                    } else {
+                                        container.innerHTML = `
                                         <div class="text-center">
                                             <h5 class="text-danger">Error</h5>
                                             <p>${data.error || 'An error occurred while processing your assessment.'}</p>
                                             <a href="../index.php" class="btn btn-primary">Return to Home</a>
                                         </div>
                                     `;
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Error:', error);
-                                container.innerHTML = `
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error:', error);
+                                    container.innerHTML = `
                                     <div class="text-center">
                                         <h5 class="text-danger">Error</h5>
                                         <p>An error occurred. Please try again later.</p>
                                         <a href="../index.php" class="btn btn-primary">Return to Home</a>
                                     </div>
                                 `;
-                            });
+                                });
                         }
-                        
+
                         function submitAssessmentUnfinished() {
                             submitAssessment(true);
                         }
@@ -526,4 +540,3 @@ $adaptive_service_url = 'http://localhost:5000';
 </body>
 
 </html>
-
