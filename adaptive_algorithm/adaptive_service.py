@@ -260,17 +260,77 @@ def select_next_question(answered_questions: List[Dict],
     
     # Parse options
     options = []
-    if question['options_data']:
-        for opt_str in question['options_data'].split('||'):
-            parts = opt_str.split(':')
-            if len(parts) >= 6:
-                options.append({
-                    'id': int(parts[0]),
-                    'option_text': ':'.join(parts[1:-3]),  # Handle colons in text
-                    'it_score': float(parts[-3]),
-                    'cs_score': float(parts[-2]),
-                    'is_score': float(parts[-1])
-                })
+    options_data = question.get('options_data')
+    
+    if options_data and options_data.strip():
+        try:
+            for opt_str in options_data.split('||'):
+                if not opt_str.strip():
+                    continue
+                    
+                parts = opt_str.split(':')
+                # Format: id:option_text:it_score:cs_score:is_score
+                # option_text may contain colons, so we need at least 5 parts
+                # (id + text + 3 scores), but text might have colons
+                if len(parts) >= 5:
+                    try:
+                        option_id = int(parts[0])
+                        # Last 3 parts are always scores, everything in between is option_text
+                        # If we have exactly 5 parts: [id, text, it, cs, is]
+                        # If we have more: [id, text_part1, text_part2, ..., it, cs, is]
+                        if len(parts) == 5:
+                            option_text = parts[1]
+                            it_score = float(parts[2])
+                            cs_score = float(parts[3])
+                            is_score = float(parts[4])
+                        else:
+                            # More than 5 parts means option_text contains colons
+                            option_text = ':'.join(parts[1:-3])
+                            it_score = float(parts[-3])
+                            cs_score = float(parts[-2])
+                            is_score = float(parts[-1])
+                        
+                        options.append({
+                            'id': option_id,
+                            'option_text': option_text,
+                            'it_score': it_score,
+                            'cs_score': cs_score,
+                            'is_score': is_score
+                        })
+                    except (ValueError, IndexError) as e:
+                        print(f"Error parsing option string '{opt_str}': {e}")
+                        print(f"Parts: {parts}")
+                        continue
+        except Exception as e:
+            print(f"Error parsing options_data: {e}")
+            print(f"options_data value: {options_data}")
+    
+    # If no options found, try to fetch them directly from database
+    if not options:
+        print(f"Warning: No options found via GROUP_CONCAT for question {next_question_id}, fetching directly...")
+        conn = get_db_connection()
+        if conn:
+            cursor = conn.cursor(dictionary=True)
+            query = """
+                SELECT id, option_text, it_score, cs_score, is_score
+                FROM answer_options
+                WHERE question_id = %s
+                ORDER BY id
+            """
+            cursor.execute(query, (next_question_id,))
+            direct_options = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            
+            if direct_options:
+                options = [{
+                    'id': int(opt['id']),
+                    'option_text': opt['option_text'],
+                    'it_score': float(opt['it_score']),
+                    'cs_score': float(opt['cs_score']),
+                    'is_score': float(opt['is_score'])
+                } for opt in direct_options]
+                print(f"Found {len(options)} options via direct query")
     
     return {
         'question_id': question['id'],
