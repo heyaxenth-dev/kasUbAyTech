@@ -189,10 +189,61 @@ def calculate_question_utility(question_id: int, current_scores: Dict[str, float
     
     return utility
 
+def check_answer_correctness(question_id: int, selected_option_id: int, conn) -> bool:
+    """Check if the selected answer is correct"""
+    cursor = conn.cursor(dictionary=True)
+    query = "SELECT is_correct_answer FROM questions WHERE id = %s"
+    cursor.execute(query, (question_id,))
+    result = cursor.fetchone()
+    cursor.close()
+    
+    if result and result.get('is_correct_answer'):
+        return int(result['is_correct_answer']) == int(selected_option_id)
+    return None  # Unknown if correct
+
+def get_category_performance(answered_questions: List[Dict], conn) -> Dict[str, Dict]:
+    """Calculate performance per category (IS/IT/CS)"""
+    category_stats = {
+        'IS': {'correct': 0, 'total': 0, 'wrong': 0},
+        'IT': {'correct': 0, 'total': 0, 'wrong': 0},
+        'CS': {'correct': 0, 'total': 0, 'wrong': 0},
+        'DIAGNOSTIC': {'correct': 0, 'total': 0, 'wrong': 0}
+    }
+    
+    for ans in answered_questions:
+        question_id = ans.get('question_id')
+        option_ids = ans.get('option_ids', [])
+        
+        if not option_ids:
+            continue
+            
+        # Get question category
+        cursor = conn.cursor(dictionary=True)
+        query = "SELECT category, is_correct_answer FROM questions WHERE id = %s"
+        cursor.execute(query, (question_id,))
+        question = cursor.fetchone()
+        cursor.close()
+        
+        if not question:
+            continue
+            
+        category = question.get('category', 'DIAGNOSTIC')
+        correct_option_id = question.get('is_correct_answer')
+        
+        category_stats[category]['total'] += 1
+        
+        if correct_option_id and int(correct_option_id) in [int(oid) for oid in option_ids]:
+            category_stats[category]['correct'] += 1
+        else:
+            category_stats[category]['wrong'] += 1
+    
+    return category_stats
+
 def select_next_question(answered_questions: List[Dict], 
                         all_question_ids: List[int] = None) -> Dict:
     """
     Select the next best question to ask based on adaptive algorithm
+    New flow: Start with diagnostic questions, then shift categories based on wrong answers
     
     Args:
         answered_questions: List of answered questions with option_ids
@@ -218,7 +269,6 @@ def select_next_question(answered_questions: List[Dict],
     for q in answered_questions:
         qid = q.get('question_id')
         if qid is not None:
-            # Convert to int to ensure type consistency
             answered_ids.append(int(qid))
     
     # Ensure all_question_ids are also integers
@@ -226,32 +276,97 @@ def select_next_question(answered_questions: List[Dict],
         all_question_ids = [int(qid) for qid in all_question_ids]
     
     print(f"Inside select_next_question:")
-    print(f"  Answered question IDs (as ints): {answered_ids}")
-    print(f"  All question IDs (as ints): {all_question_ids}")
+    print(f"  Answered question IDs: {answered_ids}")
     
-    # Calculate current scores
-    current_scores = calculate_current_scores(answered_questions)
+    # Get category performance
+    category_perf = get_category_performance(answered_questions, conn)
+    print(f"  Category performance: {category_perf}")
     
-    # Calculate utility for each unanswered question
-    question_utilities = []
-    for qid in all_question_ids:
-        qid_int = int(qid)  # Ensure integer type
-        if qid_int not in answered_ids:
-            utility = calculate_question_utility(qid_int, current_scores, answered_ids)
-            question_utilities.append((qid_int, utility))
+    # Strategy: 
+    # 1. Start with DIAGNOSTIC questions (first 3 questions)
+    # 2. If wrong answers in a category, shift to that category to test knowledge
+    # 3. Otherwise, continue with highest utility questions
+    
+    # Check if we should start with diagnostic questions
+    diagnostic_count = category_perf['DIAGNOSTIC']['total']
+    if diagnostic_count < 3:
+        # Get next diagnostic question
+        query = """
+            SELECT id FROM questions 
+            WHERE category = 'DIAGNOSTIC' AND is_active = 1 AND id NOT IN (%s)
+            ORDER BY order_number, id
+            LIMIT 1
+        """
+        placeholders = ','.join(['%s'] * len(answered_ids)) if answered_ids else '0'
+        cursor.execute(query % placeholders, answered_ids if answered_ids else [])
+        diagnostic_q = cursor.fetchone()
+        
+        if diagnostic_q:
+            next_question_id = diagnostic_q['id']
+            print(f"  Selecting diagnostic question: {next_question_id}")
         else:
-            print(f"  Skipping question {qid_int} (already answered)")
+            # No more diagnostic questions, proceed with adaptive selection
+            diagnostic_count = 3  # Force to proceed
+    else:
+        # After diagnostic questions, use adaptive strategy
+        # Find categories with wrong answers that need testing
+        categories_to_test = []
+        for cat in ['IS', 'IT', 'CS']:
+            if category_perf[cat]['total'] > 0:
+                wrong_ratio = category_perf[cat]['wrong'] / category_perf[cat]['total']
+                if wrong_ratio > 0.3:  # More than 30% wrong, need to test more
+                    categories_to_test.append((cat, wrong_ratio))
+        
+        # Sort by wrong ratio (highest first)
+        categories_to_test.sort(key=lambda x: x[1], reverse=True)
+        
+        if categories_to_test:
+            # Test the category with most wrong answers
+            target_category = categories_to_test[0][0]
+            print(f"  Shifting to {target_category} category due to wrong answers")
+            
+            query = """
+                SELECT id FROM questions 
+                WHERE category = %s AND is_active = 1 AND id NOT IN (%s)
+                ORDER BY order_number, id
+                LIMIT 1
+            """
+            placeholders = ','.join(['%s'] * len(answered_ids)) if answered_ids else '0'
+            params = [target_category] + (answered_ids if answered_ids else [0])
+            cursor.execute(query % placeholders, params)
+            category_q = cursor.fetchone()
+            
+            if category_q:
+                next_question_id = category_q['id']
+            else:
+                # No more questions in this category, use utility-based selection
+                next_question_id = None
+        else:
+            # No category needs special testing, use utility-based selection
+            next_question_id = None
     
-    if not question_utilities:
-        cursor.close()
-        conn.close()
-        return None
-    
-    # Sort by utility (highest first)
-    question_utilities.sort(key=lambda x: x[1], reverse=True)
-    
-    # Select top question
-    next_question_id = question_utilities[0][0]
+    # If no specific question selected, use utility-based selection
+    if not next_question_id:
+        # Calculate current scores
+        current_scores = calculate_current_scores(answered_questions)
+        
+        # Calculate utility for each unanswered question
+        question_utilities = []
+        for qid in all_question_ids:
+            qid_int = int(qid)
+            if qid_int not in answered_ids:
+                utility = calculate_question_utility(qid_int, current_scores, answered_ids)
+                question_utilities.append((qid_int, utility))
+        
+        if not question_utilities:
+            cursor.close()
+            conn.close()
+            return None
+        
+        # Sort by utility (highest first)
+        question_utilities.sort(key=lambda x: x[1], reverse=True)
+        next_question_id = question_utilities[0][0]
+        print(f"  Selected question {next_question_id} based on utility")
     
     # Get question details
     query = """
