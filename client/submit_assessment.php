@@ -4,6 +4,7 @@ include '../database/config.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $client_id = intval($_POST['client_id']);
     $answers = json_decode($_POST['answers'], true);
+    $is_unfinished = isset($_POST['is_unfinished']) && $_POST['is_unfinished'] == '1';
     
     // Start transaction
     $conn->begin_transaction();
@@ -82,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $conn->commit();
         
         // Return success with scores
-        echo json_encode([
+        $response = [
             'success' => true,
             'result_id' => $result_id,
             'scores' => [
@@ -90,8 +91,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 'CS' => round($cs_score, 2),
                 'IS' => round($is_score, 2)
             ],
-            'recommended' => $recommended
-        ]);
+            'is_unfinished' => $is_unfinished
+        ];
+        
+        // Only include recommended course if assessment is complete or has enough answers
+        if (!$is_unfinished || $answered_count > 0) {
+            $response['recommended'] = $recommended;
+        }
+        
+        echo json_encode($response);
         
     } catch (Exception $e) {
         // Rollback on error

@@ -194,13 +194,14 @@ $adaptive_service_url = 'http://localhost:5000';
                             })
                             .then(response => response.json())
                             .then(data => {
+                                console.log('Response from adaptive service:', data);
                                 if (data.success && data.question) {
                                     displayQuestion(data.question);
                                     updateProgress();
                                     startTimer();
                                 } else {
                                     // No more questions, submit assessment
-                                    submitAssessment();
+                                    submitAssessment(false);
                                 }
                             })
                             .catch(error => {
@@ -215,6 +216,22 @@ $adaptive_service_url = 'http://localhost:5000';
                         function displayQuestion(question) {
                             currentQuestion = question;
                             const container = document.getElementById('questionContainer');
+                            
+                            // Debug: Log question data
+                            console.log('Displaying question:', question);
+                            
+                            // Check if question has options
+                            if (!question.options || !Array.isArray(question.options) || question.options.length === 0) {
+                                container.innerHTML = `
+                                    <div class="alert alert-warning">
+                                        <h6>Error loading question options</h6>
+                                        <p>Please refresh the page or contact support if this issue persists.</p>
+                                        <button type="button" class="btn btn-primary" onclick="loadNextQuestion()">Retry</button>
+                                    </div>
+                                `;
+                                return;
+                            }
+                            
                             const isMultiple = question.question_type === 'multiple';
                             const inputType = isMultiple ? 'checkbox' : 'radio';
                             const inputName = isMultiple ? `q${question.question_id}[]` : `q${question.question_id}`;
@@ -225,8 +242,14 @@ $adaptive_service_url = 'http://localhost:5000';
                             `;
 
                             question.options.forEach((option, index) => {
+                                // Ensure option has required properties
+                                if (!option || !option.id || !option.option_text) {
+                                    console.warn('Invalid option:', option);
+                                    return;
+                                }
+                                
                                 html += `
-                                    <div class="form-check">
+                                    <div class="form-check mb-2">
                                         <input class="form-check-input" type="${inputType}" 
                                             name="${inputName}" 
                                             id="q${question.question_id}_opt${option.id}"
@@ -298,29 +321,27 @@ $adaptive_service_url = 'http://localhost:5000';
                             }, { once: true });
                         }
 
-                        // Update timer auto-submit to handle both modes
+                        // Handle timer expiry - end assessment as unfinished
                         function handleTimerExpiry() {
                             clearInterval(timerInterval);
-                            if (useRegularMode) {
-                                if (regularQuestionIndex < regularQuestions.length) {
-                                    submitRegularAnswer();
-                                }
-                            } else {
-                                if (currentQuestion) {
-                                    const inputs = document.querySelectorAll(`input[name="q${currentQuestion.question_id}"], input[name="q${currentQuestion.question_id}[]"]:checked`);
-                                    if (inputs.length > 0) {
-                                        submitAnswer();
-                                    } else {
-                                        // Skip question if no answer selected
-                                        answeredQuestions.push({
-                                            question_id: currentQuestion.question_id,
-                                            option_ids: []
-                                        });
-                                        answeredCount++;
-                                        loadNextQuestion();
-                                    }
-                                }
+                            
+                            // If there's a current question and an answer is selected, save it first
+                            if (currentQuestion) {
+                                const inputs = document.querySelectorAll(`input[name="q${currentQuestion.question_id}"], input[name="q${currentQuestion.question_id}[]"]:checked`);
+                                const selectedOptions = Array.from(inputs)
+                                    .filter(input => input.checked)
+                                    .map(input => parseInt(input.value));
+                                
+                                // Add current question to answered questions (even if no answer selected)
+                                answeredQuestions.push({
+                                    question_id: currentQuestion.question_id,
+                                    option_ids: selectedOptions
+                                });
+                                answeredCount++;
                             }
+                            
+                            // Submit assessment as unfinished
+                            submitAssessmentUnfinished();
                         }
 
                         function updateProgress() {
@@ -351,7 +372,7 @@ $adaptive_service_url = 'http://localhost:5000';
                             document.getElementById("timer").textContent = `${minutes}:${seconds}`;
                         }
 
-                        function submitAssessment() {
+                        function submitAssessment(isUnfinished = false) {
                             clearInterval(timerInterval);
                             
                             const container = document.getElementById('questionContainer');
@@ -361,6 +382,9 @@ $adaptive_service_url = 'http://localhost:5000';
                             const formData = new FormData();
                             formData.append('client_id', clientId);
                             formData.append('answers', JSON.stringify(answeredQuestions));
+                            if (isUnfinished) {
+                                formData.append('is_unfinished', '1');
+                            }
 
                             fetch('submit_assessment.php', {
                                 method: 'POST',
@@ -369,42 +393,91 @@ $adaptive_service_url = 'http://localhost:5000';
                             .then(response => response.json())
                             .then(data => {
                                 if (data.success) {
-                                    container.innerHTML = `
-                                        <div class="text-center">
-                                            <h5 class="mb-4">🎉 Assessment Completed!</h5>
-                                            <h6 class="mb-3">Your Compatibility Scores:</h6>
-                                            <div class="row mb-3">
-                                                <div class="col-4">
-                                                    <div class="card">
-                                                        <div class="card-body">
-                                                            <h6>IT</h6>
-                                                            <h4>${data.scores.IT}%</h4>
+                                    if (isUnfinished) {
+                                        container.innerHTML = `
+                                            <div class="text-center">
+                                                <h5 class="mb-4 text-warning">⏱️ Time Expired</h5>
+                                                <div class="alert alert-warning mb-3">
+                                                    <strong>Assessment Incomplete</strong><br>
+                                                    The time limit has been reached. Your assessment has been submitted with the answers you provided.
+                                                </div>
+                                                ${answeredQuestions.length > 0 ? `
+                                                    <h6 class="mb-3">Your Compatibility Scores (Based on ${answeredCount} answered question${answeredCount !== 1 ? 's' : ''}):</h6>
+                                                    <div class="row mb-3">
+                                                        <div class="col-4">
+                                                            <div class="card">
+                                                                <div class="card-body">
+                                                                    <h6>IT</h6>
+                                                                    <h4>${data.scores.IT}%</h4>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-4">
+                                                            <div class="card">
+                                                                <div class="card-body">
+                                                                    <h6>CS</h6>
+                                                                    <h4>${data.scores.CS}%</h4>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-4">
+                                                            <div class="card">
+                                                                <div class="card-body">
+                                                                    <h6>IS</h6>
+                                                                    <h4>${data.scores.IS}%</h4>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                                <div class="col-4">
-                                                    <div class="card">
-                                                        <div class="card-body">
-                                                            <h6>CS</h6>
-                                                            <h4>${data.scores.CS}%</h4>
+                                                    ${data.recommended ? `
+                                                        <div class="alert alert-info">
+                                                            <strong>Recommended Course: ${data.recommended}</strong>
                                                         </div>
-                                                    </div>
-                                                </div>
-                                                <div class="col-4">
-                                                    <div class="card">
-                                                        <div class="card-body">
-                                                            <h6>IS</h6>
-                                                            <h4>${data.scores.IS}%</h4>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                    ` : ''}
+                                                ` : `
+                                                    <p class="mb-3">No questions were answered before time expired.</p>
+                                                `}
+                                                <a href="../index.php" class="btn btn-primary">Return to Home</a>
                                             </div>
-                                            <div class="alert alert-info">
-                                                <strong>Recommended Course: ${data.recommended}</strong>
+                                        `;
+                                    } else {
+                                        container.innerHTML = `
+                                            <div class="text-center">
+                                                <h5 class="mb-4">🎉 Assessment Completed!</h5>
+                                                <h6 class="mb-3">Your Compatibility Scores:</h6>
+                                                <div class="row mb-3">
+                                                    <div class="col-4">
+                                                        <div class="card">
+                                                            <div class="card-body">
+                                                                <h6>IT</h6>
+                                                                <h4>${data.scores.IT}%</h4>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <div class="card">
+                                                            <div class="card-body">
+                                                                <h6>CS</h6>
+                                                                <h4>${data.scores.CS}%</h4>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <div class="card">
+                                                            <div class="card-body">
+                                                                <h6>IS</h6>
+                                                                <h4>${data.scores.IS}%</h4>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="alert alert-info">
+                                                    <strong>Recommended Course: ${data.recommended}</strong>
+                                                </div>
+                                                <a href="../index.php" class="btn btn-primary">Return to Home</a>
                                             </div>
-                                            <a href="../index.php" class="btn btn-primary">Return to Home</a>
-                                        </div>
-                                    `;
+                                        `;
+                                    }
                                 } else {
                                     container.innerHTML = `
                                         <div class="text-center">
@@ -425,6 +498,10 @@ $adaptive_service_url = 'http://localhost:5000';
                                     </div>
                                 `;
                             });
+                        }
+                        
+                        function submitAssessmentUnfinished() {
+                            submitAssessment(true);
                         }
                         </script>
 
