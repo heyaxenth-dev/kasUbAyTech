@@ -583,7 +583,7 @@ function insertQuestion($conn, $qData, $orderNum) {
     
     // Insert question
     $stmt = $conn->prepare("INSERT INTO questions (question_text, question_type, category, difficulty, weight, correct_option, option_a, option_b, option_c, option_d, order_number, is_active) VALUES (?, 'single', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
-    $stmt->bind_param("sssissssssi", $questionText, $category, $difficulty, $weight, $correct, $optionA, $optionB, $optionC, $optionD, $orderNum);
+    $stmt->bind_param("sssisssssi", $questionText, $category, $difficulty, $weight, $correct, $optionA, $optionB, $optionC, $optionD, $orderNum);
     
     if (!$stmt->execute()) {
         echo "Error: " . $stmt->error . "\n";
