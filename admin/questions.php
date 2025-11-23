@@ -161,25 +161,85 @@ if (!isset($_SESSION['admin_id'])) {
                             <textarea class="form-control" id="questionText" rows="3" required></textarea>
                         </div>
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label for="questionType" class="form-label">Question Type</label>
                                 <select class="form-select" id="questionType" required>
                                     <option value="single">Single Choice</option>
                                     <option value="multiple">Multiple Choice</option>
                                 </select>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
+                                <label for="category" class="form-label">Category</label>
+                                <select class="form-select" id="category" required>
+                                    <option value="DIAGNOSTIC">Diagnostic</option>
+                                    <option value="IS">Information System (IS)</option>
+                                    <option value="IT">Information Technology (IT)</option>
+                                    <option value="CS">Computer Science (CS)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
                                 <label for="orderNumber" class="form-label">Order Number</label>
                                 <input type="number" class="form-control" id="orderNumber" value="0" required>
                             </div>
                         </div>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="difficulty" class="form-label">Difficulty</label>
+                                <select class="form-select" id="difficulty" required>
+                                    <option value="EASY">Easy</option>
+                                    <option value="MEDIUM">Medium</option>
+                                    <option value="HARD">Hard</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="weight" class="form-label">Weight</label>
+                                <input type="number" class="form-control" id="weight" value="1" min="1" max="5" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="correctOption" class="form-label">Correct Option</label>
+                                <select class="form-select" id="correctOption">
+                                    <option value="">Select...</option>
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                    <option value="D">D</option>
+                                </select>
+                            </div>
+                        </div>
                         <div class="mb-3">
-                            <label class="form-label">Answer Options</label>
+                            <label class="form-label">Answer Options (A, B, C, D)</label>
+                            <div class="row mb-2">
+                                <div class="col-md-11">
+                                    <label class="form-label small">Option A</label>
+                                    <input type="text" class="form-control" id="optionA" placeholder="Enter option A text">
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-md-11">
+                                    <label class="form-label small">Option B</label>
+                                    <input type="text" class="form-control" id="optionB" placeholder="Enter option B text">
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-md-11">
+                                    <label class="form-label small">Option C</label>
+                                    <input type="text" class="form-control" id="optionC" placeholder="Enter option C text">
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-md-11">
+                                    <label class="form-label small">Option D</label>
+                                    <input type="text" class="form-control" id="optionD" placeholder="Enter option D text">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Answer Options (Legacy - for scoring)</label>
                             <div id="optionsContainer">
                                 <!-- Options will be added here -->
                             </div>
                             <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addOption()">
-                                <i class="bi bi-plus"></i> Add Option
+                                <i class="bi bi-plus"></i> Add Option (for scoring)
                             </button>
                         </div>
                     </form>
@@ -225,13 +285,19 @@ if (!isset($_SESSION['admin_id'])) {
 
             tbody.innerHTML = questions.map(q => `
                 <tr>
-                    <td>${q.order_number}</td>
+                    <td>${q.order_number || 0}</td>
                     <td>${q.question_text}</td>
-                    <td><span class="badge bg-${q.question_type === 'single' ? 'primary' : 'info'}">${q.question_type}</span></td>
                     <td>
-                        <button class="btn btn-sm btn-outline-info" onclick="viewOptions(${q.id})">
-                            View Options
-                        </button>
+                        <span class="badge bg-${q.question_type === 'single' ? 'primary' : 'info'}">${q.question_type}</span><br>
+                        <span class="badge bg-secondary mt-1">${q.category || 'DIAGNOSTIC'}</span><br>
+                        <span class="badge bg-${q.difficulty === 'HARD' ? 'danger' : q.difficulty === 'MEDIUM' ? 'warning' : 'success'} mt-1">${q.difficulty || 'MEDIUM'}</span>
+                    </td>
+                    <td>
+                        ${q.option_a ? 'A: ' + q.option_a.substring(0, 30) + '...<br>' : ''}
+                        ${q.option_b ? 'B: ' + q.option_b.substring(0, 30) + '...<br>' : ''}
+                        ${q.option_c ? 'C: ' + q.option_c.substring(0, 30) + '...<br>' : ''}
+                        ${q.option_d ? 'D: ' + q.option_d.substring(0, 30) + '...' : ''}
+                        ${!q.option_a && !q.option_b && !q.option_c && !q.option_d ? '<button class="btn btn-sm btn-outline-info" onclick="viewOptions(' + q.id + ')">View Options</button>' : ''}
                     </td>
                     <td>
                         <span class="badge bg-${q.is_active == 1 ? 'success' : 'secondary'}">
@@ -255,6 +321,14 @@ if (!isset($_SESSION['admin_id'])) {
             document.getElementById('modalTitle').textContent = 'Add Question';
             document.getElementById('questionForm').reset();
             document.getElementById('questionId').value = '';
+            document.getElementById('category').value = 'DIAGNOSTIC';
+            document.getElementById('difficulty').value = 'MEDIUM';
+            document.getElementById('weight').value = 1;
+            document.getElementById('correctOption').value = '';
+            document.getElementById('optionA').value = '';
+            document.getElementById('optionB').value = '';
+            document.getElementById('optionC').value = '';
+            document.getElementById('optionD').value = '';
             document.getElementById('optionsContainer').innerHTML = '';
             addOption(); // Add one default option
         }
@@ -305,9 +379,17 @@ if (!isset($_SESSION['admin_id'])) {
                     editingId = id;
                     document.getElementById('modalTitle').textContent = 'Edit Question';
                     document.getElementById('questionId').value = data.id;
-                    document.getElementById('questionText').value = data.question_text;
-                    document.getElementById('questionType').value = data.question_type;
-                    document.getElementById('orderNumber').value = data.order_number;
+                    document.getElementById('questionText').value = data.question_text || '';
+                    document.getElementById('questionType').value = data.question_type || 'single';
+                    document.getElementById('category').value = data.category || 'DIAGNOSTIC';
+                    document.getElementById('difficulty').value = data.difficulty || 'MEDIUM';
+                    document.getElementById('weight').value = data.weight || 1;
+                    document.getElementById('correctOption').value = data.correct_option || '';
+                    document.getElementById('optionA').value = data.option_a || '';
+                    document.getElementById('optionB').value = data.option_b || '';
+                    document.getElementById('optionC').value = data.option_c || '';
+                    document.getElementById('optionD').value = data.option_d || '';
+                    document.getElementById('orderNumber').value = data.order_number || 0;
                     
                     document.getElementById('optionsContainer').innerHTML = '';
                     if (data.options && data.options.length > 0) {
@@ -343,6 +425,14 @@ if (!isset($_SESSION['admin_id'])) {
                 id: editingId,
                 question_text: document.getElementById('questionText').value,
                 question_type: document.getElementById('questionType').value,
+                category: document.getElementById('category').value,
+                difficulty: document.getElementById('difficulty').value,
+                weight: parseInt(document.getElementById('weight').value),
+                correct_option: document.getElementById('correctOption').value || null,
+                option_a: document.getElementById('optionA').value || null,
+                option_b: document.getElementById('optionB').value || null,
+                option_c: document.getElementById('optionC').value || null,
+                option_d: document.getElementById('optionD').value || null,
                 order_number: parseInt(document.getElementById('orderNumber').value),
                 options: options
             };

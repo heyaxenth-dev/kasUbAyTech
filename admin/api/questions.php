@@ -18,14 +18,14 @@ switch ($method) {
         // Get all questions or single question
         if (isset($_GET['id'])) {
             $id = intval($_GET['id']);
-            $stmt = $conn->prepare("SELECT * FROM questions WHERE id = ?");
+            $stmt = $conn->prepare("SELECT id, question_text, question_type, category, difficulty, weight, correct_option, option_a, option_b, option_c, option_d, order_number, is_active FROM questions WHERE id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
             $result = $stmt->get_result();
             $question = $result->fetch_assoc();
             
             if ($question) {
-                // Get answer options
+                // Get answer options for backward compatibility
                 $stmt2 = $conn->prepare("SELECT * FROM answer_options WHERE question_id = ? ORDER BY id");
                 $stmt2->bind_param("i", $id);
                 $stmt2->execute();
@@ -35,7 +35,7 @@ switch ($method) {
             
             echo json_encode($question ? $question : ['error' => 'Question not found']);
         } else {
-            $result = $conn->query("SELECT * FROM questions ORDER BY order_number, id");
+            $result = $conn->query("SELECT id, question_text, question_type, category, difficulty, weight, correct_option, option_a, option_b, option_c, option_d, order_number, is_active FROM questions ORDER BY category, order_number, id");
             $questions = $result->fetch_all(MYSQLI_ASSOC);
             echo json_encode($questions);
         }
@@ -44,12 +44,20 @@ switch ($method) {
     case 'POST':
         // Create new question
         $data = json_decode(file_get_contents('php://input'), true);
-        $question_text = mysqli_real_escape_string($conn, $data['question_text']);
+        $question_text = $conn->real_escape_string($data['question_text']);
         $question_type = $data['question_type'] ?? 'single';
+        $category = $data['category'] ?? 'DIAGNOSTIC';
+        $difficulty = $data['difficulty'] ?? 'MEDIUM';
+        $weight = intval($data['weight'] ?? 1);
+        $correct_option = $data['correct_option'] ?? null;
+        $option_a = isset($data['option_a']) ? $conn->real_escape_string($data['option_a']) : null;
+        $option_b = isset($data['option_b']) ? $conn->real_escape_string($data['option_b']) : null;
+        $option_c = isset($data['option_c']) ? $conn->real_escape_string($data['option_c']) : null;
+        $option_d = isset($data['option_d']) ? $conn->real_escape_string($data['option_d']) : null;
         $order_number = intval($data['order_number'] ?? 0);
         
-        $stmt = $conn->prepare("INSERT INTO questions (question_text, question_type, order_number) VALUES (?, ?, ?)");
-        $stmt->bind_param("ssi", $question_text, $question_type, $order_number);
+        $stmt = $conn->prepare("INSERT INTO questions (question_text, question_type, category, difficulty, weight, correct_option, option_a, option_b, option_c, option_d, order_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("ssssisssssi", $question_text, $question_type, $category, $difficulty, $weight, $correct_option, $option_a, $option_b, $option_c, $option_d, $order_number);
         
         if ($stmt->execute()) {
             $question_id = $stmt->insert_id;
@@ -79,13 +87,21 @@ switch ($method) {
         // Update question
         $data = json_decode(file_get_contents('php://input'), true);
         $id = intval($data['id']);
-        $question_text = mysqli_real_escape_string($conn, $data['question_text']);
+        $question_text = $conn->real_escape_string($data['question_text']);
         $question_type = $data['question_type'] ?? 'single';
+        $category = $data['category'] ?? 'DIAGNOSTIC';
+        $difficulty = $data['difficulty'] ?? 'MEDIUM';
+        $weight = intval($data['weight'] ?? 1);
+        $correct_option = $data['correct_option'] ?? null;
+        $option_a = isset($data['option_a']) ? $conn->real_escape_string($data['option_a']) : null;
+        $option_b = isset($data['option_b']) ? $conn->real_escape_string($data['option_b']) : null;
+        $option_c = isset($data['option_c']) ? $conn->real_escape_string($data['option_c']) : null;
+        $option_d = isset($data['option_d']) ? $conn->real_escape_string($data['option_d']) : null;
         $order_number = intval($data['order_number'] ?? 0);
         $is_active = intval($data['is_active'] ?? 1);
         
-        $stmt = $conn->prepare("UPDATE questions SET question_text = ?, question_type = ?, order_number = ?, is_active = ? WHERE id = ?");
-        $stmt->bind_param("ssiii", $question_text, $question_type, $order_number, $is_active, $id);
+        $stmt = $conn->prepare("UPDATE questions SET question_text = ?, question_type = ?, category = ?, difficulty = ?, weight = ?, correct_option = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, order_number = ?, is_active = ? WHERE id = ?");
+        $stmt->bind_param("ssssissssssii", $question_text, $question_type, $category, $difficulty, $weight, $correct_option, $option_a, $option_b, $option_c, $option_d, $order_number, $is_active, $id);
         
         if ($stmt->execute()) {
             // Update or insert answer options
