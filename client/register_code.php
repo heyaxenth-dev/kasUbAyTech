@@ -1,27 +1,38 @@
-<?php 
+<?php
+/**
+ * Registration Handler
+ * 
+ * Handles student registration and redirects to disclosure page
+ */
+
 include '../database/config.php';
 
 if (isset($_POST['register']) && $_SERVER['REQUEST_METHOD'] == 'POST') {
-   
-    $first_name = mysqli_real_escape_string($conn, $_POST['first_name']);
-   $middle_name = mysqli_real_escape_string($conn, $_POST['middle_name']);
-   $last_name = mysqli_real_escape_string($conn, $_POST['last_name']);
+    // Sanitize input
+    $first_name = $conn->real_escape_string($_POST['first_name']);
+    $middle_name = $conn->real_escape_string($_POST['middle_name']);
+    $last_name = $conn->real_escape_string($_POST['last_name']);
 
-   $stmt = $conn->prepare("INSERT INTO client (firstname, middlename, lastname) VALUES (?, ?, ?)");
-   $stmt->bind_param("sss", $first_name, $middle_name, $last_name);
+    // Insert new client
+    $stmt = $conn->prepare("INSERT INTO client (firstname, middlename, lastname) VALUES (?, ?, ?)");
+    $stmt->bind_param("sss", $first_name, $middle_name, $last_name);
 
-   if ($stmt->execute()) {
-
+    if ($stmt->execute()) {
         $lastid = $stmt->insert_id;
-       
-       // Redirect to disclosure page first
-       header("Location: disclosure.php?id=$lastid");
-       exit();
-   } else {
-       echo "Error: " . $sql . "<br>" . mysqli_error($conn);
-   }
-
-    $stmt->close();
-    $conn->close();
+        $stmt->close();
+        
+        // Redirect to disclosure page
+        header("Location: disclosure.php?id=$lastid");
+        exit();
+    } else {
+        $stmt->close();
+        die("Error: Failed to register. Please try again.");
+    }
+} else {
+    // Invalid request
+    header("Location: ../register.php");
+    exit();
 }
+
+$conn->close();
 ?>

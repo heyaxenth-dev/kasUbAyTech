@@ -156,38 +156,80 @@ $adaptive_service_url = 'http://localhost:5000';
 
                         <script>
                         const clientId = <?php echo $reference_id; ?>;
+                        const examApiUrl = '../api/exam.php';
                         const adaptiveServiceUrl = '<?php echo $adaptive_service_url; ?>';
-                        const allQuestionIds = <?php echo json_encode($all_question_ids); ?>;
 
-                        let answeredQuestions = [];
+                        let sessionId = null;
                         let currentQuestion = null;
                         let timerInterval;
                         let timeLeft = 60;
                         let totalQuestions = 0;
                         let answeredCount = 0;
 
-                        // Start assessment
+                        // Start assessment - create exam session first
                         document.addEventListener('DOMContentLoaded', function() {
-                            loadNextQuestion();
+                            startExamSession();
                         });
 
-                        function loadNextQuestion() {
-                            // Show loading
+                        // Start exam session using new exam system
+                        function startExamSession() {
                             document.getElementById('questionContainer').innerHTML =
-                                '<div class="text-center"><div class="spinner-border" role="status"></div><p class="mt-2">Loading next question...</p></div>';
+                                '<div class="text-center"><div class="spinner-border" role="status"></div><p class="mt-2">Initializing assessment...</p></div>';
 
-                            console.log('Loading next question...');
-                            console.log('Answered questions so far:', answeredQuestions);
-                            console.log('Answered question IDs:', answeredQuestions.map(q => q.question_id));
-
-                            fetch(adaptiveServiceUrl + '/get_next_question', {
+                            fetch(examApiUrl + '?action=start-exam', {
                                     method: 'POST',
                                     headers: {
                                         'Content-Type': 'application/json'
                                     },
                                     body: JSON.stringify({
-                                        answered_questions: answeredQuestions,
-                                        all_question_ids: allQuestionIds
+                                        user_id: clientId
+                                    })
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success && data.session_id) {
+                                        sessionId = data.session_id;
+                                        console.log('Exam session started:', sessionId);
+                                        loadNextQuestion();
+                                    } else {
+                                        throw new Error(data.error || 'Failed to start exam session');
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error starting exam session:', error);
+                                    const container = document.getElementById('questionContainer');
+                                    container.innerHTML = `
+                                        <div class="alert alert-danger">
+                                            <h6>Error Starting Assessment</h6>
+                                            <p>${error.message}</p>
+                                            <button type="button" class="btn btn-primary" onclick="startExamSession()">Retry</button>
+                                            <a href="../index.php" class="btn btn-secondary">Return to Home</a>
+                                        </div>
+                                    `;
+                                });
+                        }
+
+                        function loadNextQuestion() {
+                            if (!sessionId) {
+                                console.error('No session ID available');
+                                startExamSession();
+                                return;
+                            }
+
+                            // Show loading
+                            document.getElementById('questionContainer').innerHTML =
+                                '<div class="text-center"><div class="spinner-border" role="status"></div><p class="mt-2">Loading next question...</p></div>';
+
+                            console.log('Loading next question for session:', sessionId);
+
+                            // Use new exam API to get next question
+                            fetch(examApiUrl + '?action=get-question', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({
+                                        session_id: sessionId
                                     })
                                 })
                                 .then(response => {
@@ -198,31 +240,27 @@ $adaptive_service_url = 'http://localhost:5000';
                                     return response.json();
                                 })
                                 .then(data => {
-                                    console.log('Response from adaptive service:', data);
-                                    console.log('Response data type:', typeof data);
-                                    console.log('Has success:', data.hasOwnProperty('success'));
-                                    console.log('Has question:', data.hasOwnProperty('question'));
+                                    console.log('Response from exam API:', data);
                                     
-                                    if (data.success && data.question) {
-                                        const nextQuestionId = data.question.question_id;
-                                        
-                                        // Check if this question was already answered
-                                        const alreadyAnswered = answeredQuestions.some(q => q.question_id === nextQuestionId);
-                                        if (alreadyAnswered) {
-                                            console.warn(`Question ${nextQuestionId} was already answered, skipping...`);
-                                            // Skip this question and load next one
-                                            loadNextQuestion();
+                                    if (data.success) {
+                                        // Check if exam should stop
+                                        if (data.stop) {
+                                            console.log('Exam finished:', data.reason);
+                                            finishExam();
                                             return;
                                         }
                                         
-                                        console.log('Question data:', data.question);
-                                        displayQuestion(data.question);
-                                        updateProgress();
-                                        startTimer();
+                                        if (data.question) {
+                                            console.log('Question data:', data.question);
+                                            displayQuestion(data.question);
+                                            updateProgress();
+                                            startTimer();
+                                        } else {
+                                            console.log('No question in response');
+                                            finishExam();
+                                        }
                                     } else {
-                                        console.log('No more questions or invalid response:', data);
-                                        // No more questions, submit assessment
-                                        submitAssessment(false);
+                                        throw new Error(data.error || 'Failed to get question');
                                     }
                                 })
                                 .catch(error => {
@@ -231,7 +269,7 @@ $adaptive_service_url = 'http://localhost:5000';
                                     container.innerHTML = `
                                         <div class="alert alert-danger">
                                             <h6>Error Loading Question</h6>
-                                            <p>Unable to connect to the assessment service. Please check your connection and try again.</p>
+                                            <p>${error.message}</p>
                                             <button type="button" class="btn btn-primary" onclick="loadNextQuestion()">Retry</button>
                                             <a href="../index.php" class="btn btn-secondary">Return to Home</a>
                                         </div>
@@ -290,9 +328,15 @@ $adaptive_service_url = 'http://localhost:5000';
                                 `;
 
                                 let validOptionsCount = 0;
+                                const optionLabels = ['A', 'B', 'C', 'D'];
+                                
                                 question.options.forEach((option, index) => {
-                                    // Ensure option has required properties
-                                    if (!option || option.id === undefined || option.id === null || !option.option_text) {
+                                    // Handle both new format (label/text) and old format (id/option_text)
+                                    let optionLabel = option.label || optionLabels[index] || 'A';
+                                    let optionText = option.text || option.option_text || '';
+                                    let optionValue = option.id || optionLabel;
+                                    
+                                    if (!optionText) {
                                         console.warn('Invalid option at index', index, ':', option);
                                         return;
                                     }
@@ -302,11 +346,11 @@ $adaptive_service_url = 'http://localhost:5000';
                                         <div class="form-check mb-2">
                                             <input class="form-check-input" type="${inputType}" 
                                                 name="${inputName}" 
-                                                id="q${question.question_id}_opt${option.id}"
-                                                value="${option.id}" 
+                                                id="q${question.question_id}_opt${index}"
+                                                value="${optionLabel}" 
                                                 ${!isMultiple ? 'required' : ''}>
-                                            <label class="form-check-label" for="q${question.question_id}_opt${option.id}">
-                                                ${option.option_text}
+                                            <label class="form-check-label" for="q${question.question_id}_opt${index}">
+                                                ${optionText}
                                             </label>
                                         </div>
                                     `;
@@ -355,7 +399,7 @@ $adaptive_service_url = 'http://localhost:5000';
                         }
 
                         function submitAnswer() {
-                            if (!currentQuestion) return;
+                            if (!currentQuestion || !sessionId) return;
 
                             const questionId = currentQuestion.question_id;
                             const inputs = document.querySelectorAll(
@@ -363,39 +407,72 @@ $adaptive_service_url = 'http://localhost:5000';
 
                             const selectedOptions = Array.from(inputs)
                                 .filter(input => input.checked)
-                                .map(input => parseInt(input.value));
+                                .map(input => input.value);
 
                             if (selectedOptions.length === 0) {
                                 alert('Please select an answer before proceeding.');
                                 return;
                             }
 
-                            // Add to answered questions
-                            answeredQuestions.push({
-                                question_id: questionId,
-                                option_ids: selectedOptions
-                            });
+                            // Get selected option label (A, B, C, or D)
+                            // The value should be the option ID or label
+                            let selectedOption = selectedOptions[0];
+                            
+                            // If it's a number (option ID), we need to map it to A/B/C/D
+                            // Check if question has options array with labels
+                            if (currentQuestion.options && currentQuestion.options.length > 0) {
+                                const optionIndex = currentQuestion.options.findIndex(opt => 
+                                    opt.id == selectedOption || opt.label == selectedOption
+                                );
+                                if (optionIndex >= 0) {
+                                    selectedOption = ['A', 'B', 'C', 'D'][optionIndex] || 'A';
+                                }
+                            }
 
-                            answeredCount++;
                             clearInterval(timerInterval);
 
-                            // Animate transition
-                            const container = document.getElementById('questionContainer');
-                            container.classList.add('slide-out-left');
+                            // Submit answer using new exam API
+                            fetch(examApiUrl + '?action=submit-answer', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({
+                                        session_id: sessionId,
+                                        question_id: questionId,
+                                        selected_option: selectedOption
+                                    })
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        answeredCount++;
+                                        
+                                        // Animate transition
+                                        const container = document.getElementById('questionContainer');
+                                        container.classList.add('slide-out-left');
 
-                            container.addEventListener('animationend', function handler() {
-                                container.classList.remove('slide-out-left');
-                                container.classList.add('slide-in-right');
+                                        container.addEventListener('animationend', function handler() {
+                                            container.classList.remove('slide-out-left');
+                                            container.classList.add('slide-in-right');
 
-                                setTimeout(() => {
-                                    container.classList.remove('slide-in-right');
-                                    loadNextQuestion();
-                                }, 400);
+                                            setTimeout(() => {
+                                                container.classList.remove('slide-in-right');
+                                                loadNextQuestion();
+                                            }, 400);
 
-                                container.removeEventListener('animationend', handler);
-                            }, {
-                                once: true
-                            });
+                                            container.removeEventListener('animationend', handler);
+                                        }, {
+                                            once: true
+                                        });
+                                    } else {
+                                        throw new Error(data.error || 'Failed to submit answer');
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error submitting answer:', error);
+                                    alert('Error submitting answer: ' + error.message);
+                                });
                         }
 
                         // Handle timer expiry - end assessment as unfinished
@@ -403,24 +480,50 @@ $adaptive_service_url = 'http://localhost:5000';
                             clearInterval(timerInterval);
 
                             // If there's a current question and an answer is selected, save it first
-                            if (currentQuestion) {
+                            if (currentQuestion && sessionId) {
                                 const inputs = document.querySelectorAll(
                                     `input[name="q${currentQuestion.question_id}"], input[name="q${currentQuestion.question_id}[]"]:checked`
                                     );
                                 const selectedOptions = Array.from(inputs)
                                     .filter(input => input.checked)
-                                    .map(input => parseInt(input.value));
+                                    .map(input => input.value);
 
-                                // Add current question to answered questions (even if no answer selected)
-                                answeredQuestions.push({
-                                    question_id: currentQuestion.question_id,
-                                    option_ids: selectedOptions
-                                });
-                                answeredCount++;
+                                if (selectedOptions.length > 0) {
+                                    let selectedOption = selectedOptions[0];
+                                    if (currentQuestion.options && currentQuestion.options.length > 0) {
+                                        const optionIndex = currentQuestion.options.findIndex(opt => 
+                                            opt.id == selectedOption || opt.label == selectedOption
+                                        );
+                                        if (optionIndex >= 0) {
+                                            selectedOption = ['A', 'B', 'C', 'D'][optionIndex] || 'A';
+                                        }
+                                    }
+
+                                    // Submit the answer quickly
+                                    fetch(examApiUrl + '?action=submit-answer', {
+                                            method: 'POST',
+                                            headers: {
+                                                'Content-Type': 'application/json'
+                                            },
+                                            body: JSON.stringify({
+                                                session_id: sessionId,
+                                                question_id: currentQuestion.question_id,
+                                                selected_option: selectedOption
+                                            })
+                                        })
+                                        .then(() => {
+                                            answeredCount++;
+                                            finishExam();
+                                        })
+                                        .catch(() => {
+                                            finishExam();
+                                        });
+                                } else {
+                                    finishExam();
+                                }
+                            } else {
+                                finishExam();
                             }
-
-                            // Submit assessment as unfinished
-                            submitAssessmentUnfinished();
                         }
 
                         function updateProgress() {
@@ -452,137 +555,155 @@ $adaptive_service_url = 'http://localhost:5000';
                             document.getElementById("timer").textContent = `${minutes}:${seconds}`;
                         }
 
-                        function submitAssessment(isUnfinished = false) {
+                        function finishExam() {
+                            if (!sessionId) {
+                                console.error('No session ID available');
+                                return;
+                            }
+
                             clearInterval(timerInterval);
 
                             const container = document.getElementById('questionContainer');
                             container.innerHTML =
                                 '<div class="text-center"><div class="spinner-border" role="status"></div><p class="mt-3">Processing your results...</p></div>';
 
-                            // Submit to PHP handler
-                            const formData = new FormData();
-                            formData.append('client_id', clientId);
-                            formData.append('answers', JSON.stringify(answeredQuestions));
-                            if (isUnfinished) {
-                                formData.append('is_unfinished', '1');
-                            }
-
-                            fetch('submit_assessment.php', {
+                            // Finish exam using new exam API
+                            fetch(examApiUrl + '?action=finish-exam', {
                                     method: 'POST',
-                                    body: formData
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({
+                                        session_id: sessionId
+                                    })
                                 })
                                 .then(response => response.json())
                                 .then(data => {
-                                    if (data.success) {
-                                        if (isUnfinished) {
-                                            container.innerHTML = `
-                                            <div class="text-center">
-                                                <h5 class="mb-4 text-warning">⏱️ Time Expired</h5>
-                                                <div class="alert alert-warning mb-3">
-                                                    <strong>Assessment Incomplete</strong><br>
-                                                    The time limit has been reached. Your assessment has been submitted with the answers you provided.
-                                                </div>
-                                                ${answeredQuestions.length > 0 ? `
-                                                    <h6 class="mb-3">Your Compatibility Scores (Based on ${answeredCount} answered question${answeredCount !== 1 ? 's' : ''}):</h6>
-                                                    <div class="row mb-3">
-                                                        <div class="col-4">
-                                                            <div class="card">
-                                                                <div class="card-body">
-                                                                    <h6>IT</h6>
-                                                                    <h4>${data.scores.IT}%</h4>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-4">
-                                                            <div class="card">
-                                                                <div class="card-body">
-                                                                    <h6>CS</h6>
-                                                                    <h4>${data.scores.CS}%</h4>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-4">
-                                                            <div class="card">
-                                                                <div class="card-body">
-                                                                    <h6>IS</h6>
-                                                                    <h4>${data.scores.IS}%</h4>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    ${data.recommended ? `
-                                                        <div class="alert alert-info">
-                                                            <strong>Recommended Course: ${data.recommended}</strong>
-                                                        </div>
-                                                    ` : ''}
-                                                ` : `
-                                                    <p class="mb-3">No questions were answered before time expired.</p>
-                                                `}
-                                                <a href="../index.php" class="btn btn-primary">Return to Home</a>
-                                            </div>
-                                        `;
-                                        } else {
-                                            container.innerHTML = `
-                                            <div class="text-center">
-                                                <h5 class="mb-4">🎉 Assessment Completed!</h5>
-                                                <h6 class="mb-3">Your Compatibility Scores:</h6>
-                                                <div class="row mb-3">
-                                                    <div class="col-4">
-                                                        <div class="card">
-                                                            <div class="card-body">
-                                                                <h6>IT</h6>
-                                                                <h4>${data.scores.IT}%</h4>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-4">
-                                                        <div class="card">
-                                                            <div class="card-body">
-                                                                <h6>CS</h6>
-                                                                <h4>${data.scores.CS}%</h4>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-4">
-                                                        <div class="card">
-                                                            <div class="card-body">
-                                                                <h6>IS</h6>
-                                                                <h4>${data.scores.IS}%</h4>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div class="alert alert-info">
-                                                    <strong>Recommended Course: ${data.recommended}</strong>
-                                                </div>
-                                                <a href="../index.php" class="btn btn-primary">Return to Home</a>
-                                            </div>
-                                        `;
-                                        }
+                                    if (data.success && data.result) {
+                                        const result = data.result;
+                                        const scores = data.scores || {};
+                                        const recommended = data.recommended_course || result.recommended_course || 'UNDECIDED';
+                                        
+                                        displayResults(scores, recommended, false);
                                     } else {
-                                        container.innerHTML = `
-                                        <div class="text-center">
-                                            <h5 class="text-danger">Error</h5>
-                                            <p>${data.error || 'An error occurred while processing your assessment.'}</p>
-                                            <a href="../index.php" class="btn btn-primary">Return to Home</a>
-                                        </div>
-                                    `;
+                                        throw new Error(data.error || 'Failed to finish exam');
                                     }
                                 })
                                 .catch(error => {
-                                    console.error('Error:', error);
+                                    console.error('Error finishing exam:', error);
                                     container.innerHTML = `
-                                    <div class="text-center">
-                                        <h5 class="text-danger">Error</h5>
-                                        <p>An error occurred. Please try again later.</p>
-                                        <a href="../index.php" class="btn btn-primary">Return to Home</a>
-                                    </div>
-                                `;
+                                        <div class="text-center">
+                                            <h5 class="text-danger">Error</h5>
+                                            <p>${error.message}</p>
+                                            <a href="../index.php" class="btn btn-primary">Return to Home</a>
+                                        </div>
+                                    `;
                                 });
                         }
 
+                        function submitAssessment(isUnfinished = false) {
+                            // Use finish exam API instead
+                            finishExam();
+                        }
+
+                        function displayResults(scores, recommended, isUnfinished) {
+                            const container = document.getElementById('questionContainer');
+                            
+                            if (isUnfinished) {
+                                container.innerHTML = `
+                                <div class="text-center">
+                                    <h5 class="mb-4 text-warning">⏱️ Time Expired</h5>
+                                    <div class="alert alert-warning mb-3">
+                                        <strong>Assessment Incomplete</strong><br>
+                                        The time limit has been reached. Your assessment has been submitted with the answers you provided.
+                                    </div>
+                                    ${answeredCount > 0 ? `
+                                        <h6 class="mb-3">Your Compatibility Scores (Based on ${answeredCount} answered question${answeredCount !== 1 ? 's' : ''}):</h6>
+                                        <div class="row mb-3">
+                                            <div class="col-4">
+                                                <div class="card">
+                                                    <div class="card-body">
+                                                        <h6>IT</h6>
+                                                        <h4>${(scores.IT || 0).toFixed(1)}%</h4>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="card">
+                                                    <div class="card-body">
+                                                        <h6>CS</h6>
+                                                        <h4>${(scores.CS || 0).toFixed(1)}%</h4>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="card">
+                                                    <div class="card-body">
+                                                        <h6>IS</h6>
+                                                        <h4>${(scores.IS || 0).toFixed(1)}%</h4>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        ${recommended && recommended !== 'UNDECIDED' ? `
+                                            <div class="alert alert-info">
+                                                <strong>Recommended Course: ${recommended}</strong>
+                                            </div>
+                                        ` : ''}
+                                    ` : `
+                                        <p class="mb-3">No questions were answered before time expired.</p>
+                                    `}
+                                    <a href="../index.php" class="btn btn-primary">Return to Home</a>
+                                </div>
+                            `;
+                            } else {
+                                container.innerHTML = `
+                                <div class="text-center">
+                                    <h5 class="mb-4">🎉 Assessment Completed!</h5>
+                                    <h6 class="mb-3">Your Compatibility Scores:</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-4">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                    <h6>IT</h6>
+                                                    <h4>${(scores.IT || 0).toFixed(1)}%</h4>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                    <h6>CS</h6>
+                                                    <h4>${(scores.CS || 0).toFixed(1)}%</h4>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                    <h6>IS</h6>
+                                                    <h4>${(scores.IS || 0).toFixed(1)}%</h4>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    ${recommended && recommended !== 'UNDECIDED' ? `
+                                        <div class="alert alert-info">
+                                            <strong>Recommended Course: ${recommended}</strong>
+                                        </div>
+                                    ` : `
+                                        <div class="alert alert-warning">
+                                            <strong>Unable to determine recommendation</strong>
+                                        </div>
+                                    `}
+                                    <a href="../index.php" class="btn btn-primary">Return to Home</a>
+                                </div>
+                            `;
+                            }
+                        }
+
                         function submitAssessmentUnfinished() {
-                            submitAssessment(true);
+                            finishExam();
                         }
                         </script>
 
