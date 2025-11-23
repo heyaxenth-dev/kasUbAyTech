@@ -495,6 +495,7 @@ function formatQuestionResponse($question)
     $formatted = [
         'question_id' => (int)$question['id'],
         'question_text' => $question['question_text'],
+        'question_type' => $question['question_type'] ?? 'single',
         'category' => $question['category'] ?? 'DIAGNOSTIC',
         'difficulty' => $question['difficulty'] ?? 'MEDIUM',
         'weight' => (int)($question['weight'] ?? 1),

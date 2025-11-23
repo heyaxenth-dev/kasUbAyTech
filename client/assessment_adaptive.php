@@ -529,9 +529,17 @@ $adaptive_service_url = 'http://localhost:5000';
                         function updateProgress() {
                             totalQuestions = Math.max(totalQuestions, answeredCount + 1);
                             const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
-                            document.getElementById('progressBar').style.width = progress + '%';
-                            document.getElementById('progressText').textContent =
-                                `${answeredCount} / ${totalQuestions}`;
+                            
+                            // Safely update progress bar if it exists
+                            const progressBar = document.getElementById('progressBar');
+                            const progressText = document.getElementById('progressText');
+                            
+                            if (progressBar) {
+                                progressBar.style.width = progress + '%';
+                            }
+                            if (progressText) {
+                                progressText.textContent = `${answeredCount} / ${totalQuestions}`;
+                            }
                         }
 
                         function startTimer() {
