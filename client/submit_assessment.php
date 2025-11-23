@@ -1,118 +1,204 @@
 <?php
-include '../database/config.php';
+/**
+ * Submit Assessment Handler
+ * 
+ * Handles assessment submission using the new exam system
+ * Maintains backward compatibility with old format
+ */
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $client_id = intval($_POST['client_id']);
-    $answers = json_decode($_POST['answers'], true);
-    $is_unfinished = isset($_POST['is_unfinished']) && $_POST['is_unfinished'] == '1';
+header('Content-Type: application/json');
+require_once __DIR__ . '/../database/config.php';
+require_once __DIR__ . '/../database/models/ExamRepository.php';
+require_once __DIR__ . '/../database/models/QuestionRepository.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+    exit();
+}
+
+$clientId = isset($_POST['client_id']) ? intval($_POST['client_id']) : 0;
+$answers = isset($_POST['answers']) ? json_decode($_POST['answers'], true) : [];
+$isUnfinished = isset($_POST['is_unfinished']) && $_POST['is_unfinished'] == '1';
+
+if (!$clientId || empty($answers)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Missing required parameters']);
+    exit();
+}
+
+// Initialize repositories
+$examRepo = new ExamRepository($conn);
+$questionRepo = new QuestionRepository($conn);
+
+// Start transaction
+$conn->begin_transaction();
+
+try {
+    // Create exam session
+    $sessionId = $examRepo->createSession($clientId);
     
-    // Start transaction
-    $conn->begin_transaction();
+    if (!$sessionId) {
+        throw new Exception('Failed to create exam session');
+    }
+
+    // Process answers and save them
+    $totalPoints = 0;
+    $categoryScores = ['IS' => 0, 'IT' => 0, 'CS' => 0];
     
-    try {
-        // Create assessment result record
-        $stmt = $conn->prepare("INSERT INTO assessment_results (client_id, total_questions, answered_questions, completed_at) VALUES (?, ?, ?, NOW())");
-        $total_questions = count($answers);
-        $answered_count = 0;
-        foreach ($answers as $ans) {
-            if (!empty($ans['option_ids'])) {
-                $answered_count++;
-            }
+    foreach ($answers as $answer) {
+        $questionId = intval($answer['question_id'] ?? 0);
+        $optionIds = $answer['option_ids'] ?? [];
+        
+        if (!$questionId || empty($optionIds)) {
+            continue;
         }
-        $stmt->bind_param("iii", $client_id, $total_questions, $answered_count);
-        $stmt->execute();
-        $result_id = $stmt->insert_id;
-        $stmt->close();
+
+        // Get question details
+        $question = $questionRepo->getQuestionById($questionId);
+        if (!$question) {
+            continue;
+        }
+
+        $category = $question['category'] ?? 'DIAGNOSTIC';
         
-        // Calculate scores
-        $it_total = 0;
-        $cs_total = 0;
-        $is_total = 0;
-        $total_weight = 0;
+        // Map option_ids to selected_option (A/B/C/D)
+        // For now, we'll use the first option_id and map it to A/B/C/D based on position
+        // This is a simplified mapping - in production, you'd want a proper mapping table
+        $selectedOption = 'A'; // Default
         
-        // Insert student answers and calculate scores
-        $stmt2 = $conn->prepare("INSERT INTO student_answers (result_id, question_id, option_id) VALUES (?, ?, ?)");
-        
-        foreach ($answers as $answer) {
-            $question_id = intval($answer['question_id']);
-            $option_ids = is_array($answer['option_ids']) ? $answer['option_ids'] : [$answer['option_ids']];
-            
-            foreach ($option_ids as $option_id) {
-                if (!empty($option_id)) {
-                    $option_id = intval($option_id);
-                    $stmt2->bind_param("iii", $result_id, $question_id, $option_id);
-                    $stmt2->execute();
-                    
-                    // Get option scores
-                    $stmt3 = $conn->prepare("SELECT it_score, cs_score, is_score FROM answer_options WHERE id = ?");
-                    $stmt3->bind_param("i", $option_id);
-                    $stmt3->execute();
-                    $score_result = $stmt3->get_result();
-                    if ($score_row = $score_result->fetch_assoc()) {
-                        $it_total += floatval($score_row['it_score']);
-                        $cs_total += floatval($score_row['cs_score']);
-                        $is_total += floatval($score_row['is_score']);
-                        $total_weight++;
-                    }
-                    $stmt3->close();
+        if (isset($question['options']) && is_array($question['options'])) {
+            $firstOptionId = intval($optionIds[0]);
+            foreach ($question['options'] as $index => $opt) {
+                if (intval($opt['id']) === $firstOptionId) {
+                    $selectedOption = ['A', 'B', 'C', 'D'][$index] ?? 'A';
+                    break;
                 }
             }
         }
-        $stmt2->close();
+
+        // Check if answer is correct
+        $isCorrect = $questionRepo->isAnswerCorrect($questionId, $selectedOption);
+        $weight = intval($question['weight'] ?? 1);
+        $pointsAwarded = $isCorrect ? $weight : 0;
+        $totalPoints += $pointsAwarded;
+
+        // Save answer
+        $examRepo->saveAnswer($sessionId, $questionId, $selectedOption, $category, $isCorrect, $pointsAwarded);
         
-        // Calculate average scores
-        $it_score = $total_weight > 0 ? ($it_total / $total_weight) * 20 : 0; // Scale to 0-100
-        $cs_score = $total_weight > 0 ? ($cs_total / $total_weight) * 20 : 0;
-        $is_score = $total_weight > 0 ? ($is_total / $total_weight) * 20 : 0;
-        
-        // Determine recommended course
-        $recommended = 'IT';
-        if ($cs_score > $it_score && $cs_score > $is_score) {
-            $recommended = 'CS';
-        } elseif ($is_score > $it_score && $is_score > $cs_score) {
-            $recommended = 'IS';
+        // Track category scores (for diagnostic phase)
+        if ($category !== 'DIAGNOSTIC' && $isCorrect) {
+            if (isset($categoryScores[$category])) {
+                $categoryScores[$category] += $pointsAwarded;
+            }
         }
-        
-        // Insert compatibility scores
-        $stmt4 = $conn->prepare("INSERT INTO compatibility_scores (result_id, it_score, cs_score, is_score, recommended_course) VALUES (?, ?, ?, ?, ?)");
-        $stmt4->bind_param("iddds", $result_id, $it_score, $cs_score, $is_score, $recommended);
-        $stmt4->execute();
-        $stmt4->close();
-        
-        // Commit transaction
-        $conn->commit();
-        
-        // Return success with scores
-        $response = [
-            'success' => true,
-            'result_id' => $result_id,
-            'scores' => [
-                'IT' => round($it_score, 2),
-                'CS' => round($cs_score, 2),
-                'IS' => round($is_score, 2)
-            ],
-            'is_unfinished' => $is_unfinished
-        ];
-        
-        // Only include recommended course if assessment is complete or has enough answers
-        if (!$is_unfinished || $answered_count > 0) {
-            $response['recommended'] = $recommended;
-        }
-        
-        echo json_encode($response);
-        
-    } catch (Exception $e) {
-        // Rollback on error
-        $conn->rollback();
-        http_response_code(500);
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
+
+    // Determine dominant category
+    $dominantCategory = 'IT';
+    if ($categoryScores['CS'] > $categoryScores['IT'] && $categoryScores['CS'] > $categoryScores['IS']) {
+        $dominantCategory = 'CS';
+    } elseif ($categoryScores['IS'] > $categoryScores['IT'] && $categoryScores['IS'] > $categoryScores['CS']) {
+        $dominantCategory = 'IS';
+    }
+
+    // Update session
+    $stage = $isUnfinished ? 'CATEGORY' : 'FINISHED';
+    $examRepo->updateSession($sessionId, [
+        'stage' => $stage,
+        'dominant_category' => $dominantCategory
+    ]);
+
+    // Calculate final scores using Python service
+    $adaptiveServiceUrl = 'http://localhost:5000/calculate_scores';
+    $answeredQuestions = [];
     
-} else {
-    http_response_code(405);
-    echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+    foreach ($answers as $answer) {
+        $questionId = intval($answer['question_id'] ?? 0);
+        $optionIds = $answer['option_ids'] ?? [];
+        
+        if ($questionId && !empty($optionIds)) {
+            $answeredQuestions[] = [
+                'question_id' => $questionId,
+                'option_ids' => array_map('intval', $optionIds)
+            ];
+        }
+    }
+
+    $scores = ['IT' => 0, 'CS' => 0, 'IS' => 0];
+    $recommendedCourse = 'UNDECIDED';
+    $confidenceScore = 0.0;
+
+    // Call Python service for scoring
+    if (!empty($answeredQuestions)) {
+        $ch = curl_init($adaptiveServiceUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['answered_questions' => $answeredQuestions]));
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode === 200 && $response) {
+            $scoreData = json_decode($response, true);
+            if ($scoreData && isset($scoreData['scores'])) {
+                $scores = $scoreData['scores'];
+                $recommendedCourse = $scoreData['recommended_course'] ?? 'UNDECIDED';
+                
+                // Calculate confidence score
+                $sortedScores = $scores;
+                arsort($sortedScores);
+                $sortedArray = array_values($sortedScores);
+                if (count($sortedArray) >= 2) {
+                    $top = $sortedArray[0];
+                    $second = $sortedArray[1];
+                    $confidenceScore = ($top - $second) / max($top, 1);
+                } else {
+                    $confidenceScore = $sortedArray[0] / 100.0;
+                }
+            }
+        }
+    }
+
+    // Save exam result
+    if ($stage === 'FINISHED') {
+        $examRepo->saveResult($sessionId, $recommendedCourse, $totalPoints, $confidenceScore);
+    }
+
+    // Commit transaction
+    $conn->commit();
+
+    // Return response (maintaining backward compatibility)
+    $response = [
+        'success' => true,
+        'result_id' => $sessionId, // Using session_id as result_id for compatibility
+        'session_id' => $sessionId,
+        'scores' => [
+            'IT' => round($scores['IT'] ?? 0, 2),
+            'CS' => round($scores['CS'] ?? 0, 2),
+            'IS' => round($scores['IS'] ?? 0, 2)
+        ],
+        'is_unfinished' => $isUnfinished
+    ];
+
+    // Include recommended course if assessment is complete or has enough answers
+    if (!$isUnfinished || count($answers) > 0) {
+        $response['recommended'] = $recommendedCourse;
+    }
+
+    echo json_encode($response);
+
+} catch (Exception $e) {
+    // Rollback on error
+    $conn->rollback();
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'error' => $e->getMessage()
+    ]);
+} finally {
+    $conn->close();
 }
-
-$conn->close();
-?>
-
