@@ -7,25 +7,43 @@ if (!isset($_SESSION['admin_id'])) {
 
 include '../database/config.php';
 
-// Get compatibility statistics
+// Get compatibility statistics from new exam_results table
 $stats_query = "SELECT 
-    COUNT(*) as total_assessments,
-    AVG(cs.it_score) as avg_it,
-    AVG(cs.cs_score) as avg_cs,
-    AVG(cs.is_score) as avg_is,
-    SUM(CASE WHEN cs.recommended_course = 'IT' THEN 1 ELSE 0 END) as recommended_it,
-    SUM(CASE WHEN cs.recommended_course = 'CS' THEN 1 ELSE 0 END) as recommended_cs,
-    SUM(CASE WHEN cs.recommended_course = 'IS' THEN 1 ELSE 0 END) as recommended_is
-    FROM compatibility_scores cs";
-$stats = $conn->query($stats_query)->fetch_assoc();
+    COUNT(*) AS total_assessments,
+    SUM(CASE WHEN er.recommended_course = 'IT' THEN 1 ELSE 0 END) AS recommended_it,
+    SUM(CASE WHEN er.recommended_course = 'CS' THEN 1 ELSE 0 END) AS recommended_cs,
+    SUM(CASE WHEN er.recommended_course = 'IS' THEN 1 ELSE 0 END) AS recommended_is
+FROM exam_results er";
+$stats_result = $conn->query($stats_query);
+$stats = $stats_result ? $stats_result->fetch_assoc() : [
+    'total_assessments' => 0,
+    'recommended_it' => 0,
+    'recommended_cs' => 0,
+    'recommended_is' => 0,
+];
 
-// Get all compatibility scores with student info
-$scores_query = "SELECT cs.*, c.firstname, c.lastname, ar.completed_at
-    FROM compatibility_scores cs
-    JOIN assessment_results ar ON cs.result_id = ar.id
-    JOIN client c ON ar.client_id = c.id
-    ORDER BY ar.completed_at DESC";
-$scores = $conn->query($scores_query)->fetch_all(MYSQLI_ASSOC);
+// Derive percentage distribution of recommendations per course
+$totalAssessments = (int)($stats['total_assessments'] ?? 0);
+$itCount = (int)($stats['recommended_it'] ?? 0);
+$csCount = (int)($stats['recommended_cs'] ?? 0);
+$isCount = (int)($stats['recommended_is'] ?? 0);
+
+$avg_it = $totalAssessments > 0 ? ($itCount / $totalAssessments) * 100 : 0;
+$avg_cs = $totalAssessments > 0 ? ($csCount / $totalAssessments) * 100 : 0;
+$avg_is = $totalAssessments > 0 ? ($isCount / $totalAssessments) * 100 : 0;
+
+// Get all compatibility scores with student info aligned to new exam schema
+$scores_query = "SELECT 
+        er.*,
+        c.firstname,
+        c.lastname,
+        es.created_at AS completed_at
+    FROM exam_results er
+    JOIN exam_sessions es ON er.session_id = es.id
+    JOIN client c ON es.user_id = c.id
+    ORDER BY er.created_at DESC";
+$scores_result = $conn->query($scores_query);
+$scores = $scores_result ? $scores_result->fetch_all(MYSQLI_ASSOC) : [];
 $conn->close();
 ?>
 <!DOCTYPE html>
@@ -77,13 +95,14 @@ $conn->close();
             <ul class="d-flex align-items-center">
                 <li class="nav-item dropdown pe-3">
                     <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
-                        <span class="d-none d-md-block dropdown-toggle ps-2"><?php echo $_SESSION['admin_username']; ?></span>
+                        <span
+                            class="d-none d-md-block dropdown-toggle ps-2"><?php echo $_SESSION['admin_username']; ?></span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
                         <li><a class="dropdown-item d-flex align-items-center" href="logout.php">
-                            <i class="bi bi-box-arrow-right"></i>
-                            <span>Sign Out</span>
-                        </a></li>
+                                <i class="bi bi-box-arrow-right"></i>
+                                <span>Sign Out</span>
+                            </a></li>
                     </ul>
                 </li>
             </ul>
@@ -159,7 +178,7 @@ $conn->close();
                                     <i class="bi bi-laptop"></i>
                                 </div>
                                 <div class="ps-3">
-                                    <h6><?php echo number_format($stats['avg_it'] ?? 0, 2); ?>%</h6>
+                                    <h6><?php echo number_format($avg_it ?? 0, 2); ?>%</h6>
                                 </div>
                             </div>
                         </div>
@@ -175,7 +194,7 @@ $conn->close();
                                     <i class="bi bi-code-square"></i>
                                 </div>
                                 <div class="ps-3">
-                                    <h6><?php echo number_format($stats['avg_cs'] ?? 0, 2); ?>%</h6>
+                                    <h6><?php echo number_format($avg_cs ?? 0, 2); ?>%</h6>
                                 </div>
                             </div>
                         </div>
@@ -191,7 +210,7 @@ $conn->close();
                                     <i class="bi bi-diagram-3"></i>
                                 </div>
                                 <div class="ps-3">
-                                    <h6><?php echo number_format($stats['avg_is'] ?? 0, 2); ?>%</h6>
+                                    <h6><?php echo number_format($avg_is ?? 0, 2); ?>%</h6>
                                 </div>
                             </div>
                         </div>
@@ -232,10 +251,9 @@ $conn->close();
                                     <thead>
                                         <tr>
                                             <th>Student Name</th>
-                                            <th>IT Score</th>
-                                            <th>CS Score</th>
-                                            <th>IS Score</th>
                                             <th>Recommended</th>
+                                            <th>Final Score</th>
+                                            <th>Confidence</th>
                                             <th>Date</th>
                                         </tr>
                                     </thead>
@@ -243,37 +261,28 @@ $conn->close();
                                         <?php if (count($scores) > 0): ?>
                                         <?php foreach ($scores as $score): ?>
                                         <tr>
-                                            <td><?php echo htmlspecialchars($score['firstname'] . ' ' . $score['lastname']); ?></td>
-                                            <td>
-                                                <div class="progress" style="height: 20px;">
-                                                    <div class="progress-bar" role="progressbar" style="width: <?php echo $score['it_score']; ?>%">
-                                                        <?php echo number_format($score['it_score'], 1); ?>%
-                                                    </div>
-                                                </div>
+                                            <td><?php echo htmlspecialchars($score['firstname'] . ' ' . $score['lastname']); ?>
                                             </td>
                                             <td>
-                                                <div class="progress" style="height: 20px;">
-                                                    <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo $score['cs_score']; ?>%">
-                                                        <?php echo number_format($score['cs_score'], 1); ?>%
-                                                    </div>
-                                                </div>
+                                                <?php if ($score['recommended_course'] && $score['recommended_course'] !== 'UNDECIDED'): ?>
+                                                <span
+                                                    class="badge bg-primary"><?php echo $score['recommended_course']; ?></span>
+                                                <?php else: ?>
+                                                <span class="badge bg-secondary">UNDECIDED</span>
+                                                <?php endif; ?>
                                             </td>
                                             <td>
-                                                <div class="progress" style="height: 20px;">
-                                                    <div class="progress-bar bg-info" role="progressbar" style="width: <?php echo $score['is_score']; ?>%">
-                                                        <?php echo number_format($score['is_score'], 1); ?>%
-                                                    </div>
-                                                </div>
+                                                <?php echo isset($score['final_score']) ? intval($score['final_score']) : 0; ?>
                                             </td>
                                             <td>
-                                                <span class="badge bg-primary"><?php echo $score['recommended_course']; ?></span>
+                                                <?php echo isset($score['confidence_score']) ? number_format($score['confidence_score'] * 100, 1) . '%' : '0.0%'; ?>
                                             </td>
                                             <td><?php echo date('M d, Y', strtotime($score['completed_at'])); ?></td>
                                         </tr>
                                         <?php endforeach; ?>
                                         <?php else: ?>
                                         <tr>
-                                            <td colspan="6" class="text-center">No compatibility scores found.</td>
+                                            <td colspan="5" class="text-center">No compatibility scores found.</td>
                                         </tr>
                                         <?php endif; ?>
                                     </tbody>
@@ -287,52 +296,52 @@ $conn->close();
     </main>
 
     <script>
-        // Average Scores Chart
-        const avgCtx = document.getElementById('avgScoresChart').getContext('2d');
-        new Chart(avgCtx, {
-            type: 'bar',
-            data: {
-                labels: ['IT', 'CS', 'IS'],
-                datasets: [{
-                    label: 'Average Score (%)',
-                    data: [
-                        <?php echo number_format($stats['avg_it'] ?? 0, 2); ?>,
-                        <?php echo number_format($stats['avg_cs'] ?? 0, 2); ?>,
-                        <?php echo number_format($stats['avg_is'] ?? 0, 2); ?>
-                    ],
-                    backgroundColor: ['#4154f1', '#2eca6a', '#ff771d']
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100
-                    }
+    // Average Scores Chart
+    const avgCtx = document.getElementById('avgScoresChart').getContext('2d');
+    new Chart(avgCtx, {
+        type: 'bar',
+        data: {
+            labels: ['IT', 'CS', 'IS'],
+            datasets: [{
+                label: 'Average Score (%)',
+                data: [
+                    <?php echo number_format($avg_it ?? 0, 2); ?>,
+                    <?php echo number_format($avg_cs ?? 0, 2); ?>,
+                    <?php echo number_format($avg_is ?? 0, 2); ?>
+                ],
+                backgroundColor: ['#4154f1', '#2eca6a', '#ff771d']
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
                 }
             }
-        });
+        }
+    });
 
-        // Recommendations Chart
-        const recCtx = document.getElementById('recommendationsChart').getContext('2d');
-        new Chart(recCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['IT', 'CS', 'IS'],
-                datasets: [{
-                    data: [
-                        <?php echo $stats['recommended_it'] ?? 0; ?>,
-                        <?php echo $stats['recommended_cs'] ?? 0; ?>,
-                        <?php echo $stats['recommended_is'] ?? 0; ?>
-                    ],
-                    backgroundColor: ['#4154f1', '#2eca6a', '#ff771d']
-                }]
-            },
-            options: {
-                responsive: true
-            }
-        });
+    // Recommendations Chart
+    const recCtx = document.getElementById('recommendationsChart').getContext('2d');
+    new Chart(recCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['IT', 'CS', 'IS'],
+            datasets: [{
+                data: [
+                    <?php echo $stats['recommended_it'] ?? 0; ?>,
+                    <?php echo $stats['recommended_cs'] ?? 0; ?>,
+                    <?php echo $stats['recommended_is'] ?? 0; ?>
+                ],
+                backgroundColor: ['#4154f1', '#2eca6a', '#ff771d']
+            }]
+        },
+        options: {
+            responsive: true
+        }
+    });
     </script>
 
     <!-- Vendor JS Files -->
@@ -342,4 +351,3 @@ $conn->close();
 </body>
 
 </html>
-

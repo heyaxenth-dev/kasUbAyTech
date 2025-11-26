@@ -7,13 +7,25 @@ if (!isset($_SESSION['admin_id'])) {
 
 include '../database/config.php';
 
-// Get all assessment results with student info and compatibility scores
-$query = "SELECT ar.*, c.firstname, c.middlename, c.lastname, 
-          cs.it_score, cs.cs_score, cs.is_score, cs.recommended_course
-          FROM assessment_results ar
-          JOIN client c ON ar.client_id = c.id
-          LEFT JOIN compatibility_scores cs ON ar.id = cs.result_id
-          ORDER BY ar.completed_at DESC";
+// Get all exam sessions with results and student info (aligned with new exam_results schema)
+$query = "SELECT 
+            es.id, 
+            es.user_id, 
+            es.stage, 
+            es.created_at, 
+            es.dominant_category,
+            c.firstname, 
+            c.middlename, 
+            c.lastname, 
+            er.recommended_course, 
+            er.final_score, 
+            er.confidence_score, 
+            er.created_at AS completed_at,
+            (SELECT COUNT(*) FROM exam_answers WHERE session_id = es.id) AS answered_questions
+          FROM exam_sessions es
+          JOIN client c ON es.user_id = c.id
+          LEFT JOIN exam_results er ON es.id = er.session_id
+          ORDER BY es.created_at DESC";
 $results = $conn->query($query)->fetch_all(MYSQLI_ASSOC);
 $conn->close();
 ?>
@@ -65,13 +77,14 @@ $conn->close();
             <ul class="d-flex align-items-center">
                 <li class="nav-item dropdown pe-3">
                     <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
-                        <span class="d-none d-md-block dropdown-toggle ps-2"><?php echo $_SESSION['admin_username']; ?></span>
+                        <span
+                            class="d-none d-md-block dropdown-toggle ps-2"><?php echo $_SESSION['admin_username']; ?></span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
                         <li><a class="dropdown-item d-flex align-items-center" href="logout.php">
-                            <i class="bi bi-box-arrow-right"></i>
-                            <span>Sign Out</span>
-                        </a></li>
+                                <i class="bi bi-box-arrow-right"></i>
+                                <span>Sign Out</span>
+                            </a></li>
                     </ul>
                 </li>
             </ul>
@@ -130,16 +143,15 @@ $conn->close();
                                 <table class="table table-striped table-hover">
                                     <thead>
                                         <tr>
-                                            <th>ID</th>
+                                            <th>Session ID</th>
                                             <th>Student Name</th>
                                             <th>Started At</th>
                                             <th>Completed At</th>
-                                            <th>Questions</th>
+                                            <th>Stage</th>
                                             <th>Answered</th>
-                                            <th>IT Score</th>
-                                            <th>CS Score</th>
-                                            <th>IS Score</th>
                                             <th>Recommended</th>
+                                            <th>Final Score</th>
+                                            <th>Confidence</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -148,23 +160,43 @@ $conn->close();
                                         <?php foreach ($results as $result): ?>
                                         <tr>
                                             <td><?php echo $result['id']; ?></td>
-                                            <td><?php echo htmlspecialchars($result['firstname'] . ' ' . $result['lastname']); ?></td>
-                                            <td><?php echo date('M d, Y H:i', strtotime($result['started_at'])); ?></td>
-                                            <td><?php echo $result['completed_at'] ? date('M d, Y H:i', strtotime($result['completed_at'])) : 'Incomplete'; ?></td>
-                                            <td><?php echo $result['total_questions']; ?></td>
-                                            <td><?php echo $result['answered_questions']; ?></td>
-                                            <td><?php echo $result['it_score'] ? number_format($result['it_score'], 2) . '%' : 'N/A'; ?></td>
-                                            <td><?php echo $result['cs_score'] ? number_format($result['cs_score'], 2) . '%' : 'N/A'; ?></td>
-                                            <td><?php echo $result['is_score'] ? number_format($result['is_score'], 2) . '%' : 'N/A'; ?></td>
+                                            <td><?php echo htmlspecialchars($result['firstname'] . ' ' . $result['lastname']); ?>
+                                            </td>
+                                            <td><?php echo date('M d, Y H:i', strtotime($result['created_at'])); ?></td>
+                                            <td><?php echo $result['completed_at'] ? date('M d, Y H:i', strtotime($result['completed_at'])) : 'Incomplete'; ?>
+                                            </td>
                                             <td>
-                                                <?php if ($result['recommended_course']): ?>
-                                                <span class="badge bg-primary"><?php echo $result['recommended_course']; ?></span>
+                                                <?php if ($result['stage'] === 'FINISHED'): ?>
+                                                <span class="badge bg-success">Finished</span>
+                                                <?php elseif ($result['stage'] === 'CATEGORY'): ?>
+                                                <span class="badge bg-warning text-dark">Category</span>
                                                 <?php else: ?>
-                                                <span class="badge bg-secondary">N/A</span>
+                                                <span class="badge bg-secondary">Diagnostic</span>
+                                                <?php endif; ?>
+                                                <?php if (!empty($result['dominant_category'])): ?>
+                                                <span
+                                                    class="badge bg-info ms-1"><?php echo $result['dominant_category']; ?></span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?php echo $result['answered_questions']; ?></td>
+                                            <td>
+                                                <?php if ($result['recommended_course'] && $result['recommended_course'] !== 'UNDECIDED'): ?>
+                                                <span
+                                                    class="badge bg-primary"><?php echo $result['recommended_course']; ?></span>
+                                                <?php else: ?>
+                                                <span
+                                                    class="badge bg-secondary"><?php echo $result['stage'] === 'FINISHED' ? 'UNDECIDED' : 'In Progress'; ?></span>
                                                 <?php endif; ?>
                                             </td>
                                             <td>
-                                                <a href="view_result.php?id=<?php echo $result['id']; ?>" class="btn btn-sm btn-info">
+                                                <?php echo $result['final_score'] !== null ? intval($result['final_score']) : 'N/A'; ?>
+                                            </td>
+                                            <td>
+                                                <?php echo $result['confidence_score'] !== null ? number_format($result['confidence_score'] * 100, 1) . '%' : 'N/A'; ?>
+                                            </td>
+                                            <td>
+                                                <a href="view_result.php?id=<?php echo $result['id']; ?>"
+                                                    class="btn btn-sm btn-info">
                                                     <i class="bi bi-eye"></i> View
                                                 </a>
                                             </td>
@@ -172,7 +204,7 @@ $conn->close();
                                         <?php endforeach; ?>
                                         <?php else: ?>
                                         <tr>
-                                            <td colspan="11" class="text-center">No assessment results found.</td>
+                                            <td colspan="10" class="text-center">No assessment results found.</td>
                                         </tr>
                                         <?php endif; ?>
                                     </tbody>
@@ -193,4 +225,3 @@ $conn->close();
 </body>
 
 </html>
-

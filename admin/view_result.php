@@ -7,37 +7,71 @@ if (!isset($_SESSION['admin_id'])) {
 
 include '../database/config.php';
 
-$result_id = intval($_GET['id'] ?? 0);
+// In the new exam system, the ID passed from results.php is the exam session ID
+$session_id = intval($_GET['id'] ?? 0);
 
-// Get result details
-$result_query = "SELECT ar.*, c.firstname, c.middlename, c.lastname, 
-                 cs.it_score, cs.cs_score, cs.is_score, cs.recommended_course
-                 FROM assessment_results ar
-                 JOIN client c ON ar.client_id = c.id
-                 LEFT JOIN compatibility_scores cs ON ar.id = cs.result_id
-                 WHERE ar.id = ?";
-$stmt = $conn->prepare($result_query);
-$stmt->bind_param("i", $result_id);
+if ($session_id <= 0) {
+    die("Invalid session ID");
+}
+
+// Get session + result + student details
+$session_query = "SELECT 
+        es.*,
+        c.firstname,
+        c.middlename,
+        c.lastname,
+        er.recommended_course,
+        er.final_score,
+        er.confidence_score,
+        er.created_at AS completed_at
+    FROM exam_sessions es
+    JOIN client c ON es.user_id = c.id
+    LEFT JOIN exam_results er ON er.session_id = es.id
+    WHERE es.id = ?";
+
+$stmt = $conn->prepare($session_query);
+if (!$stmt) {
+    die("Failed to prepare session query");
+}
+
+$stmt->bind_param("i", $session_id);
 $stmt->execute();
-$result = $stmt->get_result()->fetch_assoc();
+$session = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-if (!$result) {
+if (!$session) {
     die("Result not found");
 }
 
-// Get student answers with question and option details
-$answers_query = "SELECT sa.*, q.question_text, q.question_type, ao.option_text
-                  FROM student_answers sa
-                  JOIN questions q ON sa.question_id = q.id
-                  JOIN answer_options ao ON sa.option_id = ao.id
-                  WHERE sa.result_id = ?
-                  ORDER BY q.order_number, q.id";
+// Get student answers with question details (using new exam_answers table)
+$answers_query = "SELECT 
+        ea.*,
+        q.question_text,
+        q.question_type,
+        q.option_a,
+        q.option_b,
+        q.option_c,
+        q.option_d
+    FROM exam_answers ea
+    JOIN questions q ON ea.question_id = q.id
+    WHERE ea.session_id = ?
+    ORDER BY ea.created_at ASC, ea.id ASC";
+
 $stmt2 = $conn->prepare($answers_query);
-$stmt2->bind_param("i", $result_id);
+if (!$stmt2) {
+    die("Failed to prepare answers query");
+}
+
+$stmt2->bind_param("i", $session_id);
 $stmt2->execute();
 $answers = $stmt2->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt2->close();
+
+// Basic aggregates for display
+$answeredCount = count($answers);
+$uniqueQuestionIds = array_unique(array_column($answers, 'question_id'));
+$totalQuestions = count($uniqueQuestionIds);
+
 $conn->close();
 ?>
 <!DOCTYPE html>
@@ -88,13 +122,14 @@ $conn->close();
             <ul class="d-flex align-items-center">
                 <li class="nav-item dropdown pe-3">
                     <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
-                        <span class="d-none d-md-block dropdown-toggle ps-2"><?php echo $_SESSION['admin_username']; ?></span>
+                        <span
+                            class="d-none d-md-block dropdown-toggle ps-2"><?php echo $_SESSION['admin_username']; ?></span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
                         <li><a class="dropdown-item d-flex align-items-center" href="logout.php">
-                            <i class="bi bi-box-arrow-right"></i>
-                            <span>Sign Out</span>
-                        </a></li>
+                                <i class="bi bi-box-arrow-right"></i>
+                                <span>Sign Out</span>
+                            </a></li>
                     </ul>
                 </li>
             </ul>
@@ -152,12 +187,21 @@ $conn->close();
                             <h5 class="card-title">Student Information</h5>
                             <div class="row">
                                 <div class="col-md-6">
-                                    <p><strong>Name:</strong> <?php echo htmlspecialchars($result['firstname'] . ' ' . $result['middlename'] . ' ' . $result['lastname']); ?></p>
-                                    <p><strong>Started At:</strong> <?php echo date('M d, Y H:i:s', strtotime($result['started_at'])); ?></p>
+                                    <p><strong>Name:</strong>
+                                        <?php echo htmlspecialchars($session['firstname'] . ' ' . $session['middlename'] . ' ' . $session['lastname']); ?>
+                                    </p>
+                                    <p><strong>Started At:</strong>
+                                        <?php echo date('M d, Y H:i:s', strtotime($session['created_at'])); ?></p>
                                 </div>
                                 <div class="col-md-6">
-                                    <p><strong>Completed At:</strong> <?php echo $result['completed_at'] ? date('M d, Y H:i:s', strtotime($result['completed_at'])) : 'Incomplete'; ?></p>
-                                    <p><strong>Questions:</strong> <?php echo $result['answered_questions']; ?> / <?php echo $result['total_questions']; ?></p>
+                                    <p><strong>Completed At:</strong>
+                                        <?php echo $session['completed_at'] ? date('M d, Y H:i:s', strtotime($session['completed_at'])) : 'Incomplete'; ?>
+                                    </p>
+                                    <p><strong>Questions Answered:</strong> <?php echo $answeredCount; ?>
+                                        <?php if ($totalQuestions > 0): ?>
+                                        / <?php echo $totalQuestions; ?>
+                                        <?php endif; ?>
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -165,51 +209,44 @@ $conn->close();
                 </div>
             </div>
 
-            <!-- Compatibility Scores -->
-            <?php if ($result['it_score']): ?>
+            <!-- Exam Result Summary (new exam system) -->
+            <?php if ($session['stage'] === 'FINISHED'): ?>
             <div class="row">
                 <div class="col-lg-12">
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title">Compatibility Scores</h5>
+                            <h5 class="card-title">Exam Result Summary</h5>
                             <div class="row">
                                 <div class="col-md-4">
                                     <div class="card">
                                         <div class="card-body text-center">
-                                            <h6>IT (Information Technology)</h6>
-                                            <h3><?php echo number_format($result['it_score'], 2); ?>%</h3>
-                                            <div class="progress mt-2">
-                                                <div class="progress-bar" role="progressbar" style="width: <?php echo $result['it_score']; ?>%"></div>
-                                            </div>
+                                            <h6>Final Score</h6>
+                                            <h3><?php echo isset($session['final_score']) ? intval($session['final_score']) : 0; ?>
+                                            </h3>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="card">
                                         <div class="card-body text-center">
-                                            <h6>CS (Computer Science)</h6>
-                                            <h3><?php echo number_format($result['cs_score'], 2); ?>%</h3>
-                                            <div class="progress mt-2">
-                                                <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo $result['cs_score']; ?>%"></div>
-                                            </div>
+                                            <h6>Confidence</h6>
+                                            <h3>
+                                                <?php echo isset($session['confidence_score']) ? number_format($session['confidence_score'] * 100, 1) . '%' : 'N/A'; ?>
+                                            </h3>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="card">
                                         <div class="card-body text-center">
-                                            <h6>IS (Information Systems)</h6>
-                                            <h3><?php echo number_format($result['is_score'], 2); ?>%</h3>
-                                            <div class="progress mt-2">
-                                                <div class="progress-bar bg-info" role="progressbar" style="width: <?php echo $result['is_score']; ?>%"></div>
-                                            </div>
+                                            <h6>Recommended Course</h6>
+                                            <h3>
+                                                <?php echo $session['recommended_course'] && $session['recommended_course'] !== 'UNDECIDED'
+                                                    ? htmlspecialchars($session['recommended_course'])
+                                                    : 'UNDECIDED'; ?>
+                                            </h3>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-                            <div class="mt-3 text-center">
-                                <div class="alert alert-primary">
-                                    <strong>Recommended Course: <?php echo $result['recommended_course']; ?></strong>
                                 </div>
                             </div>
                         </div>
@@ -225,42 +262,61 @@ $conn->close();
                         <div class="card-body">
                             <h5 class="card-title">Student Answers</h5>
                             <?php if (count($answers) > 0): ?>
-                            <?php 
-                            $current_question = null;
-                            $question_num = 0;
-                            foreach ($answers as $answer): 
-                                if ($current_question != $answer['question_id']):
-                                    if ($current_question !== null) echo '</div></div>';
-                                    $current_question = $answer['question_id'];
-                                    $question_num++;
-                            ?>
+                            <?php
+                                $currentQuestionId = null;
+                                $questionNum = 0;
+                                foreach ($answers as $answer):
+                                    if ($currentQuestionId !== $answer['question_id']):
+                                        if ($currentQuestionId !== null) {
+                                            echo '</ul></div></div>';
+                                        }
+                                        $currentQuestionId = $answer['question_id'];
+                                        $questionNum++;
+
+                                        // Determine selected option text
+                                        $selectedLabel = $answer['selected_option'];
+                                        $selectedText = '';
+                                        switch ($selectedLabel) {
+                                            case 'A': $selectedText = $answer['option_a']; break;
+                                            case 'B': $selectedText = $answer['option_b']; break;
+                                            case 'C': $selectedText = $answer['option_c']; break;
+                                            case 'D': $selectedText = $answer['option_d']; break;
+                                        }
+
+                                        $isCorrect = !empty($answer['is_correct']);
+                                ?>
                             <div class="card mb-3">
                                 <div class="card-body">
-                                    <h6><?php echo $question_num; ?>. <?php echo htmlspecialchars($answer['question_text']); ?></h6>
-                                    <p class="text-muted small">Type: <?php echo ucfirst($answer['question_type']); ?></p>
+                                    <h6><?php echo $questionNum; ?>.
+                                        <?php echo htmlspecialchars($answer['question_text']); ?></h6>
+                                    <p class="text-muted small">
+                                        Type: <?php echo ucfirst($answer['question_type']); ?> |
+                                        Category: <?php echo htmlspecialchars($answer['category']); ?> |
+                                        Selected: <?php echo htmlspecialchars($selectedLabel); ?> -
+                                        <?php echo htmlspecialchars($selectedText); ?> |
+                                        <?php echo $isCorrect ? 'Correct' : 'Incorrect'; ?>
+                                    </p>
                                     <ul class="list-group">
-                            <?php endif; ?>
-                                        <li class="list-group-item">
-                                            <i class="bi bi-check-circle-fill text-success"></i> 
-                                            <?php echo htmlspecialchars($answer['option_text']); ?>
-                                        </li>
-                            <?php endforeach; ?>
-                                    </ul>
+                                        <?php
+                                    endif;
+                                endforeach;
+                                if ($currentQuestionId !== null) {
+                                    echo '</ul></div></div>';
+                                }
+                                ?>
+                                        <?php else: ?>
+                                        <p class="text-center">No answers found for this assessment.</p>
+                                        <?php endif; ?>
                                 </div>
                             </div>
-                            <?php else: ?>
-                            <p class="text-center">No answers found for this assessment.</p>
-                            <?php endif; ?>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <div class="row">
-                <div class="col-lg-12">
-                    <a href="results.php" class="btn btn-secondary">Back to Results</a>
-                </div>
-            </div>
+                    <div class="row">
+                        <div class="col-lg-12">
+                            <a href="results.php" class="btn btn-secondary">Back to Results</a>
+                        </div>
+                    </div>
         </section>
     </main>
 
@@ -271,4 +327,3 @@ $conn->close();
 </body>
 
 </html>
-

@@ -502,28 +502,39 @@ function formatQuestionResponse($question)
         'options' => []
     ];
 
-    // Build options from option_a, option_b, option_c, option_d
+    // Build options from option_a, option_b, option_c, option_d (primary source)
     $optionLabels = ['A', 'B', 'C', 'D'];
     foreach ($optionLabels as $label) {
         $optionKey = 'option_' . strtolower($label);
         if (!empty($question[$optionKey])) {
             $formatted['options'][] = [
                 'label' => $label,
-                'text' => $question[$optionKey]
+                'text'  => $question[$optionKey]
             ];
         }
     }
 
-    // Also include options from answer_options table for backward compatibility
-    if (isset($question['options']) && is_array($question['options'])) {
+    /**
+     * Backward compatibility with answer_options table:
+     * Some legacy questions might not have option_a–d columns populated and instead
+     * rely solely on the answer_options table. In that case, synthesize A–D-style
+     * options from answer_options, but avoid mixing the two formats which caused
+     * duplicate / confusing choices in the UI.
+     */
+    if (empty($formatted['options']) && isset($question['options']) && is_array($question['options'])) {
+        $idx = 0;
         foreach ($question['options'] as $opt) {
+            if ($idx >= 4) {
+                break; // limit to first four to keep A–D semantics
+            }
+
+            $label = $optionLabels[$idx];
             $formatted['options'][] = [
-                'id' => (int)$opt['id'],
-                'option_text' => $opt['option_text'],
-                'it_score' => floatval($opt['it_score'] ?? 0),
-                'cs_score' => floatval($opt['cs_score'] ?? 0),
-                'is_score' => floatval($opt['is_score'] ?? 0)
+                'label' => $label,
+                'text'  => $opt['option_text'] ?? ''
             ];
+
+            $idx++;
         }
     }
 
@@ -531,4 +542,3 @@ function formatQuestionResponse($question)
 }
 
 $conn->close();
-
