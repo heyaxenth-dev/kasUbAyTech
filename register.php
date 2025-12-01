@@ -44,7 +44,7 @@
 
                         <div class="d-flex justify-content-center py-4">
                             <a href="index.html" class="logo d-flex align-items-center w-auto">
-                                <img src="assets/img/logo.png" alt="">
+                                <img src="assets/img/kt-logo.png" alt="">
                                 <span class="d-none d-lg-block text-white">kasUbAyTech</span>
                             </a>
                         </div><!-- End Logo -->
@@ -88,8 +88,8 @@
                                     </div>
 
                                     <div class="col-12">
-                                        <button class="btn btn-primary w-100" name="register"
-                                            type="submit">Start Assessment</button>
+                                        <button class="btn btn-primary w-100" name="register" type="submit">Start
+                                            Assessment</button>
                                     </div>
                                 </form>
 

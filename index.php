@@ -35,9 +35,9 @@
     <header id="header" class="header d-flex align-items-center fixed-top">
         <div class="container-fluid container-xl position-relative d-flex align-items-center">
 
-            <a href="index.html" class="logo d-flex align-items-center me-auto">
+            <a href="index.php" class="logo d-flex align-items-center me-auto">
                 <!-- Uncomment the line below if you also wish to use an image logo -->
-                <img src="assets/img/logo.png" alt="">
+                <img src="assets/img/kt-logo.png" alt="">
                 <h1 class="sitename">kasUbAyTech</h1>
             </a>
 
@@ -92,7 +92,7 @@
                         </div>
                     </div>
                     <div class="col-lg-6 order-1 order-lg-2 hero-img">
-                        <img src="assets/img/hero-img.png" class="img-fluid animated" alt="">
+                        <img src="assets/img/kasubaytechlogo-transparent.png" class="img-fluid animated" alt="">
                     </div>
                 </div>
             </div>
@@ -106,7 +106,7 @@
         <div class="container footer-top">
             <div class="row gy-4">
                 <div class="col-lg-5 col-md-12 footer-about">
-                    <a href="index.html" class="logo d-flex align-items-center">
+                    <a href="index.php" class="logo d-flex align-items-center">
                         <span class="sitename">kasUbAyTech</span>
                     </a>
                     <p>Cras fermentum odio eu feugiat lide par naso tierra. Justo eget nada terra videa magna derita

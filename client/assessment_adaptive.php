@@ -92,7 +92,7 @@ $adaptive_service_url = 'http://localhost:5000';
                                     </p>
                                     <p class="text-center small">Questions will adapt based on your answers for better
                                         accuracy</p>
-                                        
+
                                     <!-- Current Scores Display -->
                                     <div id="currentScores" class="mb-3 d-none">
                                         <div class="row text-center">
@@ -241,7 +241,7 @@ $adaptive_service_url = 'http://localhost:5000';
                                 })
                                 .then(data => {
                                     console.log('Response from exam API:', data);
-                                    
+
                                     if (data.success) {
                                         // Check if exam should stop
                                         if (data.stop) {
@@ -249,7 +249,7 @@ $adaptive_service_url = 'http://localhost:5000';
                                             finishExam();
                                             return;
                                         }
-                                        
+
                                         if (data.question) {
                                             console.log('Question data:', data.question);
                                             displayQuestion(data.question);
@@ -285,7 +285,8 @@ $adaptive_service_url = 'http://localhost:5000';
                                 // Debug: Log question data
                                 console.log('Displaying question:', question);
                                 console.log('Question options:', question.options);
-                                console.log('Options type:', typeof question.options, 'Is array:', Array.isArray(question.options));
+                                console.log('Options type:', typeof question.options, 'Is array:', Array.isArray(
+                                    question.options));
 
                                 // Check if question exists
                                 if (!question) {
@@ -301,7 +302,8 @@ $adaptive_service_url = 'http://localhost:5000';
                                 }
 
                                 // Check if question has options
-                                if (!question.options || !Array.isArray(question.options) || question.options.length === 0) {
+                                if (!question.options || !Array.isArray(question.options) || question.options.length ===
+                                    0) {
                                     console.error('Question has no valid options:', {
                                         hasOptions: !!question.options,
                                         isArray: Array.isArray(question.options),
@@ -320,7 +322,8 @@ $adaptive_service_url = 'http://localhost:5000';
 
                                 const isMultiple = question.question_type === 'multiple';
                                 const inputType = isMultiple ? 'checkbox' : 'radio';
-                                const inputName = isMultiple ? `q${question.question_id}[]` : `q${question.question_id}`;
+                                const inputName = isMultiple ? `q${question.question_id}[]` :
+                                    `q${question.question_id}`;
 
                                 let html = `
                                     <div class="question" id="question${question.question_id}">
@@ -329,13 +332,13 @@ $adaptive_service_url = 'http://localhost:5000';
 
                                 let validOptionsCount = 0;
                                 const optionLabels = ['A', 'B', 'C', 'D'];
-                                
+
                                 question.options.forEach((option, index) => {
                                     // Handle both new format (label/text) and old format (id/option_text)
                                     let optionLabel = option.label || optionLabels[index] || 'A';
                                     let optionText = option.text || option.option_text || '';
                                     let optionValue = option.id || optionLabel;
-                                    
+
                                     if (!optionText) {
                                         console.warn('Invalid option at index', index, ':', option);
                                         return;
@@ -381,9 +384,12 @@ $adaptive_service_url = 'http://localhost:5000';
                                 // Update current scores display
                                 if (question.current_scores) {
                                     document.getElementById('currentScores').classList.remove('d-none');
-                                    document.getElementById('scoreIT').textContent = (question.current_scores.IT || 0) + '%';
-                                    document.getElementById('scoreCS').textContent = (question.current_scores.CS || 0) + '%';
-                                    document.getElementById('scoreIS').textContent = (question.current_scores.IS || 0) + '%';
+                                    document.getElementById('scoreIT').textContent = (question.current_scores.IT || 0) +
+                                        '%';
+                                    document.getElementById('scoreCS').textContent = (question.current_scores.CS || 0) +
+                                        '%';
+                                    document.getElementById('scoreIS').textContent = (question.current_scores.IS || 0) +
+                                        '%';
                                 }
                             } catch (error) {
                                 console.error('Error in displayQuestion:', error);
@@ -417,11 +423,11 @@ $adaptive_service_url = 'http://localhost:5000';
                             // Get selected option label (A, B, C, or D)
                             // The value should be the option ID or label
                             let selectedOption = selectedOptions[0];
-                            
+
                             // If it's a number (option ID), we need to map it to A/B/C/D
                             // Check if question has options array with labels
                             if (currentQuestion.options && currentQuestion.options.length > 0) {
-                                const optionIndex = currentQuestion.options.findIndex(opt => 
+                                const optionIndex = currentQuestion.options.findIndex(opt =>
                                     opt.id == selectedOption || opt.label == selectedOption
                                 );
                                 if (optionIndex >= 0) {
@@ -447,7 +453,7 @@ $adaptive_service_url = 'http://localhost:5000';
                                 .then(data => {
                                     if (data.success) {
                                         answeredCount++;
-                                        
+
                                         // Animate transition
                                         const container = document.getElementById('questionContainer');
                                         container.classList.add('slide-out-left');
@@ -483,7 +489,7 @@ $adaptive_service_url = 'http://localhost:5000';
                             if (currentQuestion && sessionId) {
                                 const inputs = document.querySelectorAll(
                                     `input[name="q${currentQuestion.question_id}"], input[name="q${currentQuestion.question_id}[]"]:checked`
-                                    );
+                                );
                                 const selectedOptions = Array.from(inputs)
                                     .filter(input => input.checked)
                                     .map(input => input.value);
@@ -491,7 +497,7 @@ $adaptive_service_url = 'http://localhost:5000';
                                 if (selectedOptions.length > 0) {
                                     let selectedOption = selectedOptions[0];
                                     if (currentQuestion.options && currentQuestion.options.length > 0) {
-                                        const optionIndex = currentQuestion.options.findIndex(opt => 
+                                        const optionIndex = currentQuestion.options.findIndex(opt =>
                                             opt.id == selectedOption || opt.label == selectedOption
                                         );
                                         if (optionIndex >= 0) {
@@ -529,11 +535,11 @@ $adaptive_service_url = 'http://localhost:5000';
                         function updateProgress() {
                             totalQuestions = Math.max(totalQuestions, answeredCount + 1);
                             const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
-                            
+
                             // Safely update progress bar if it exists
                             const progressBar = document.getElementById('progressBar');
                             const progressText = document.getElementById('progressText');
-                            
+
                             if (progressBar) {
                                 progressBar.style.width = progress + '%';
                             }
@@ -590,8 +596,9 @@ $adaptive_service_url = 'http://localhost:5000';
                                     if (data.success && data.result) {
                                         const result = data.result;
                                         const scores = data.scores || {};
-                                        const recommended = data.recommended_course || result.recommended_course || 'UNDECIDED';
-                                        
+                                        const recommended = data.recommended_course || result.recommended_course ||
+                                            'UNDECIDED';
+
                                         displayResults(scores, recommended, false);
                                     } else {
                                         throw new Error(data.error || 'Failed to finish exam');
@@ -616,7 +623,7 @@ $adaptive_service_url = 'http://localhost:5000';
 
                         function displayResults(scores, recommended, isUnfinished) {
                             const container = document.getElementById('questionContainer');
-                            
+
                             if (isUnfinished) {
                                 container.innerHTML = `
                                 <div class="text-center">
