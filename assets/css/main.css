@@ -190,7 +190,7 @@ h6 {
 
 .header .btn-getstarted:hover,
 .header .btn-getstarted:focus:hover {
-	color: var(--contrast-color);
+	color: var(--accent-color);
 	border-color: var(--contrast-color);
 }
 
