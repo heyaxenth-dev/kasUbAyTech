@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 import math
 import time
 import threading
+import random
 
 app = Flask(__name__)
 CORS(app)
@@ -458,16 +459,27 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
         # Prioritize untested categories to ensure balanced testing
         for target_cat in ['IT', 'CS', 'IS']:  # Test in this order for consistency
             if target_cat in untested_categories:
+                # Build a candidate list for this category and shuffle it so that
+                # different sessions/users see different non-diagnostic questions first.
+                candidate_ids: List[int] = []
                 for qid in all_qids:
-                    if int(qid) in answered_ids:
+                    qid_int = int(qid)
+                    if qid_int in answered_ids:
                         continue
-                    q = get_question_by_id(int(qid))
+                    q = get_question_by_id(qid_int)
                     if not q:
                         continue
                     if q.category == target_cat:
+                        candidate_ids.append(q.id)
+
+                if candidate_ids:
+                    random.shuffle(candidate_ids)
+                    next_id = candidate_ids[0]
+                    q_next = get_question_by_id(next_id)
+                    if q_next:
                         return {
                             "stop": False,
-                            "next_question_id": q.id,
+                            "next_question_id": q_next.id,
                             "current_scores": norm_scores,
                             "reason": f"balance_test_{target_cat}"
                         }
@@ -485,16 +497,27 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
     if categories_to_test:
         # select first question from the top problematic category
         target_cat = categories_to_test[0][0]
+        # Build and shuffle candidate IDs for this category so the concrete
+        # questions vary across sessions, while the category focus stays the same.
+        candidate_ids: List[int] = []
         for qid in all_qids:
-            if int(qid) in answered_ids:
+            qid_int = int(qid)
+            if qid_int in answered_ids:
                 continue
-            q = get_question_by_id(int(qid))
+            q = get_question_by_id(qid_int)
             if not q:
                 continue
             if q.category == target_cat:
+                candidate_ids.append(q.id)
+
+        if candidate_ids:
+            random.shuffle(candidate_ids)
+            next_id = candidate_ids[0]
+            q_next = get_question_by_id(next_id)
+            if q_next:
                 return {
                     "stop": False,
-                    "next_question_id": q.id,
+                    "next_question_id": q_next.id,
                     "current_scores": norm_scores,
                     "reason": f"target_category_{target_cat}"
                 }
@@ -513,12 +536,20 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
     
     current_scores_for_metrics = norm_scores_01  # 0..1
     utilities = []
-    for qid in all_qids:
+    # Shuffle question order for the utility-based phase so that non-diagnostic
+    # questions are not always traversed in the same global order between users.
+    shuffled_qids = list(all_qids)
+    random.shuffle(shuffled_qids)
+    for qid in shuffled_qids:
         qid_int = int(qid)
         if qid_int in answered_ids:
             continue
         q = get_question_by_id(qid_int)
         if not q or not q.options:
+            continue
+        # Keep diagnostic ("controlled") questions out of the utility-based pool;
+        # they are handled deterministically in the earlier diagnostic phase.
+        if q.category == 'DIAGNOSTIC':
             continue
         
         # Skip if this category was asked in the last 2 questions (unless it's the only option)

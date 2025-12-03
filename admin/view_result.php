@@ -122,10 +122,10 @@ include './includes/sidebar.php';
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">Exam Result Summary</h5>
-                        <div class="row">
+                        <div class="row g-3">
                             <div class="col-md-4">
-                                <div class="card">
-                                    <div class="card-body text-center">
+                                <div class="card h-100 shadow-sm border-0">
+                                    <div class="card-body text-center py-4">
                                         <h6>Final Score</h6>
                                         <h3><?php echo isset($session['final_score']) ? intval($session['final_score']) : 0; ?>
                                         </h3>
@@ -133,8 +133,8 @@ include './includes/sidebar.php';
                                 </div>
                             </div>
                             <div class="col-md-4">
-                                <div class="card">
-                                    <div class="card-body text-center">
+                                <div class="card h-100 shadow-sm border-0">
+                                    <div class="card-body text-center py-4">
                                         <h6>Confidence</h6>
                                         <h3>
                                             <?php echo isset($session['confidence_score']) ? number_format($session['confidence_score'] * 100, 1) . '%' : 'N/A'; ?>
@@ -143,8 +143,8 @@ include './includes/sidebar.php';
                                 </div>
                             </div>
                             <div class="col-md-4">
-                                <div class="card">
-                                    <div class="card-body text-center">
+                                <div class="card h-100 shadow-sm border-0">
+                                    <div class="card-body text-center py-4">
                                         <h6>Recommended Course</h6>
                                         <h3>
                                             <?php echo $session['recommended_course'] && $session['recommended_course'] !== 'UNDECIDED'
@@ -191,8 +191,8 @@ include './includes/sidebar.php';
 
                                         $isCorrect = !empty($answer['is_correct']);
                                 ?>
-                        <div class="card mb-3">
-                            <div class="card-body">
+                        <div class="card mb-3 shadow-sm border-0">
+                            <div class="card-body py-3">
                                 <h6><?php echo $questionNum; ?>.
                                     <?php echo htmlspecialchars($answer['question_text']); ?></h6>
                                 <p class="text-muted small">

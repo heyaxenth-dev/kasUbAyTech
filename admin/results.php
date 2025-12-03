@@ -77,12 +77,13 @@ include './includes/sidebar.php';
                                             <span class="badge bg-success">Finished</span>
                                             <?php elseif ($result['stage'] === 'CATEGORY'): ?>
                                             <span class="badge bg-warning text-dark">Category</span>
+                                            <?php if (!empty($result['dominant_category'])): ?>
+                                            <span class="badge bg-info ms-1">
+                                                <?php echo htmlspecialchars($result['dominant_category']); ?>
+                                            </span>
+                                            <?php endif; ?>
                                             <?php else: ?>
                                             <span class="badge bg-secondary">Diagnostic</span>
-                                            <?php endif; ?>
-                                            <?php if (!empty($result['dominant_category'])): ?>
-                                            <span
-                                                class="badge bg-info ms-1"><?php echo $result['dominant_category']; ?></span>
                                             <?php endif; ?>
                                         </td>
                                         <td><?php echo $result['answered_questions']; ?></td>

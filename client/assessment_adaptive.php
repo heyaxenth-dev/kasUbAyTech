@@ -165,6 +165,8 @@ $adaptive_service_url = 'http://localhost:5000';
                         let timeLeft = 60;
                         let totalQuestions = 0;
                         let answeredCount = 0;
+                        // Tracks selected option labels per question (e.g. { 12: ['A'], 13: ['B','C'] })
+                        let currentSelections = {};
 
                         // Start assessment - create exam session first
                         document.addEventListener('DOMContentLoaded', function() {
@@ -321,9 +323,6 @@ $adaptive_service_url = 'http://localhost:5000';
                                 }
 
                                 const isMultiple = question.question_type === 'multiple';
-                                const inputType = isMultiple ? 'checkbox' : 'radio';
-                                const inputName = isMultiple ? `q${question.question_id}[]` :
-                                    `q${question.question_id}`;
 
                                 let html = `
                                     <div class="question" id="question${question.question_id}">
@@ -346,16 +345,13 @@ $adaptive_service_url = 'http://localhost:5000';
 
                                     validOptionsCount++;
                                     html += `
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input" type="${inputType}" 
-                                                name="${inputName}" 
-                                                id="q${question.question_id}_opt${index}"
-                                                value="${optionLabel}" 
-                                                ${!isMultiple ? 'required' : ''}>
-                                            <label class="form-check-label" for="q${question.question_id}_opt${index}">
-                                                ${optionText}
-                                            </label>
-                                        </div>
+                                        <button 
+                                            type="button" 
+                                            class="btn w-100 mb-2 text-start option-button btn-outline-secondary" 
+                                            data-question-id="${question.question_id}"
+                                            data-label="${optionLabel}">
+                                            ${optionText}
+                                        </button>
                                     `;
                                 });
 
@@ -380,6 +376,46 @@ $adaptive_service_url = 'http://localhost:5000';
 
                                 container.innerHTML = html;
                                 console.log('Question HTML rendered successfully');
+
+                                // Reset and initialise selection state for this question
+                                currentSelections[question.question_id] = [];
+
+                                // Attach click behaviour for option buttons
+                                const buttons = container.querySelectorAll('.option-button');
+                                buttons.forEach(btn => {
+                                    btn.addEventListener('click', () => {
+                                        const qid = question.question_id;
+                                        const label = btn.getAttribute('data-label');
+                                        const isMulti = isMultiple;
+
+                                        if (!currentSelections[qid]) {
+                                            currentSelections[qid] = [];
+                                        }
+
+                                        if (isMulti) {
+                                            // Toggle selection for multiple-choice
+                                            const idx = currentSelections[qid].indexOf(label);
+                                            if (idx === -1) {
+                                                currentSelections[qid].push(label);
+                                                btn.classList.add('active', 'btn-secondary');
+                                                btn.classList.remove('btn-outline-secondary');
+                                            } else {
+                                                currentSelections[qid].splice(idx, 1);
+                                                btn.classList.remove('active', 'btn-secondary');
+                                                btn.classList.add('btn-outline-secondary');
+                                            }
+                                        } else {
+                                            // Single-choice: clear others and set this one
+                                            currentSelections[qid] = [label];
+                                            buttons.forEach(b => {
+                                                b.classList.remove('active', 'btn-secondary');
+                                                b.classList.add('btn-outline-secondary');
+                                            });
+                                            btn.classList.add('active', 'btn-secondary');
+                                            btn.classList.remove('btn-outline-secondary');
+                                        }
+                                    });
+                                });
 
                                 // Update current scores display
                                 if (question.current_scores) {
@@ -408,12 +444,7 @@ $adaptive_service_url = 'http://localhost:5000';
                             if (!currentQuestion || !sessionId) return;
 
                             const questionId = currentQuestion.question_id;
-                            const inputs = document.querySelectorAll(
-                                `input[name="q${questionId}"], input[name="q${questionId}[]"]:checked`);
-
-                            const selectedOptions = Array.from(inputs)
-                                .filter(input => input.checked)
-                                .map(input => input.value);
+                            const selectedOptions = (currentSelections[questionId] || []).slice();
 
                             if (selectedOptions.length === 0) {
                                 alert('Please select an answer before proceeding.');
@@ -487,12 +518,7 @@ $adaptive_service_url = 'http://localhost:5000';
 
                             // If there's a current question and an answer is selected, save it first
                             if (currentQuestion && sessionId) {
-                                const inputs = document.querySelectorAll(
-                                    `input[name="q${currentQuestion.question_id}"], input[name="q${currentQuestion.question_id}[]"]:checked`
-                                );
-                                const selectedOptions = Array.from(inputs)
-                                    .filter(input => input.checked)
-                                    .map(input => input.value);
+                                const selectedOptions = (currentSelections[currentQuestion.question_id] || []).slice();
 
                                 if (selectedOptions.length > 0) {
                                     let selectedOption = selectedOptions[0];
