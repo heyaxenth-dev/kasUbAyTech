@@ -293,10 +293,40 @@ def approx_information_gain(current_scores_norm: Dict[str, float], option_scores
 
 
 # ------------- UTILITY: SELECT NEXT QUESTION -------------
+def get_diagnostic_question_category_bias(q: Question) -> Optional[str]:
+    """
+    Determine which category a diagnostic question favors by analyzing option scores.
+    Returns 'IT', 'CS', 'IS', or None if balanced/unclear.
+    A question favors a category if its options have significantly higher scores for that category.
+    """
+    if not q.options:
+        return None
+    
+    # Calculate average scores per category across all options
+    avg_it = sum(o.it_score for o in q.options) / len(q.options)
+    avg_cs = sum(o.cs_score for o in q.options) / len(q.options)
+    avg_is = sum(o.is_score for o in q.options) / len(q.options)
+    
+    # Find the category with the highest average score
+    scores = {'IT': avg_it, 'CS': avg_cs, 'IS': avg_is}
+    max_cat = max(scores.items(), key=lambda x: x[1])
+    
+    # Check if the max is significantly higher than others (at least 0.5 point difference)
+    # This ensures we only classify questions that clearly favor a category
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    if len(sorted_scores) >= 2:
+        top_score = sorted_scores[0][1]
+        second_score = sorted_scores[1][1]
+        if top_score - second_score >= 0.5:
+            return max_cat[0]
+    
+    return None
+
+
 def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_question_ids: Optional[List[int]] = None) -> Optional[Dict[str, Any]]:
     """
     Core decision logic:
-    1. If no questions answered or diagnostic count < DIAGNOSTIC_COUNT -> pick next DIAGNOSTIC
+    1. If no questions answered or diagnostic count < DIAGNOSTIC_COUNT -> pick balanced DIAGNOSTIC questions
     2. Compute category performance and identify categories with high wrong ratio
     3. If any category needs testing (wrong ratio > threshold), prefer that category
     4. Else use utility ranking (variance + distinction + approx info gain)
@@ -307,14 +337,20 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
     all_qids = all_question_ids or get_all_question_ids()
     answered_ids = [int(q.get('question_id')) for q in answered_questions if q.get('question_id')]
 
-    # 1) Determine diagnostic progress
+    # 1) Determine diagnostic progress and track which categories have been covered
     # diagnostic questions are those with category 'DIAGNOSTIC'
     diag_answered = 0
+    covered_categories = set()  # Track which categories (IT/CS/IS) have been covered by diagnostic questions
+    
     for q in answered_questions:
         qid = q.get('question_id')
         qobj = get_question_by_id(int(qid)) if qid else None
         if qobj and qobj.category == 'DIAGNOSTIC':
             diag_answered += 1
+            # Determine which category this diagnostic question favors
+            bias = get_diagnostic_question_category_bias(qobj)
+            if bias:
+                covered_categories.add(bias)
 
     # Quick compute raw + normalized scores
     raw_scores = compute_raw_scores(answered_questions)
@@ -338,9 +374,15 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
             "recommended_course": top_course
         }
 
-    # If still in diagnostic phase -> select next diagnostic question
+    # If still in diagnostic phase -> select balanced diagnostic questions
     if diag_answered < DIAGNOSTIC_COUNT:
-        # find first DIAGNOSTIC question not answered
+        # Determine which category we need to cover next
+        # Priority: IT (0), CS (1), IS (2) - ensure one of each
+        target_categories = ['IT', 'CS', 'IS']
+        needed_categories = [cat for cat in target_categories if cat not in covered_categories]
+        
+        # Collect all available diagnostic questions
+        available_diag = []
         for qid in all_qids:
             q = get_question_by_id(int(qid))
             if not q:
@@ -348,12 +390,31 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
             if q.id in answered_ids:
                 continue
             if q.category == 'DIAGNOSTIC':
-                return {
-                    "stop": False,
-                    "next_question_id": q.id,
-                    "current_scores": norm_scores,
-                    "reason": "diagnostic"
-                }
+                bias = get_diagnostic_question_category_bias(q)
+                available_diag.append((q, bias))
+        
+        # If we have specific categories to cover, prioritize those
+        if needed_categories:
+            for target_cat in needed_categories:
+                for q, bias in available_diag:
+                    if bias == target_cat:
+                        return {
+                            "stop": False,
+                            "next_question_id": q.id,
+                            "current_scores": norm_scores,
+                            "reason": f"diagnostic_balanced_{target_cat}"
+                        }
+        
+        # If no specific category needed or no questions match, pick any available diagnostic
+        # This handles cases where diagnostic questions don't clearly favor a category
+        for q, bias in available_diag:
+            return {
+                "stop": False,
+                "next_question_id": q.id,
+                "current_scores": norm_scores,
+                "reason": "diagnostic"
+            }
+        
         # no more diagnostic available - fall through
 
     # Compute category performance to identify weak areas
@@ -362,6 +423,10 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
         'IT': {'correct': 0, 'wrong': 0, 'total': 0},
         'CS': {'correct': 0, 'wrong': 0, 'total': 0},
     }
+    # Track which categories have been tested (non-diagnostic questions)
+    tested_categories = set()
+    category_question_counts = {'IT': 0, 'CS': 0, 'IS': 0}  # Count questions per category
+    
     # To evaluate correctness, we compare answered option(s) with question.is_correct_answer if available
     for ans in answered_questions:
         qid = ans.get('question_id')
@@ -375,11 +440,37 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
         if cat == 'DIAGNOSTIC':
             continue
         category_perf[cat]['total'] += 1
+        tested_categories.add(cat)
+        if cat in category_question_counts:
+            category_question_counts[cat] += 1
         if q.is_correct_answer and int(q.is_correct_answer) in [int(s) for s in selected]:
             category_perf[cat]['correct'] += 1
         else:
             # treat unanswered or wrong as wrong
             category_perf[cat]['wrong'] += 1
+
+    # After diagnostic phase, ensure we test all three categories before focusing
+    # If we haven't tested all categories yet, prioritize untested ones
+    all_categories = {'IT', 'CS', 'IS'}
+    untested_categories = all_categories - tested_categories
+    
+    if untested_categories:
+        # Prioritize untested categories to ensure balanced testing
+        for target_cat in ['IT', 'CS', 'IS']:  # Test in this order for consistency
+            if target_cat in untested_categories:
+                for qid in all_qids:
+                    if int(qid) in answered_ids:
+                        continue
+                    q = get_question_by_id(int(qid))
+                    if not q:
+                        continue
+                    if q.category == target_cat:
+                        return {
+                            "stop": False,
+                            "next_question_id": q.id,
+                            "current_scores": norm_scores,
+                            "reason": f"balance_test_{target_cat}"
+                        }
 
     # Identify categories with high wrong ratios (>30%)
     categories_to_test = []
@@ -409,6 +500,17 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
                 }
 
     # Fallback: utility-based selection across all unanswered questions
+    # Track recent question categories to avoid repetition
+    recent_categories = []
+    if answered_questions:
+        # Get the last 2-3 questions' categories to avoid repetition
+        for ans in answered_questions[-3:]:
+            qid = ans.get('question_id')
+            if qid:
+                q = get_question_by_id(int(qid))
+                if q and q.category in ['IT', 'CS', 'IS']:
+                    recent_categories.append(q.category)
+    
     current_scores_for_metrics = norm_scores_01  # 0..1
     utilities = []
     for qid in all_qids:
@@ -418,6 +520,13 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
         q = get_question_by_id(qid_int)
         if not q or not q.options:
             continue
+        
+        # Skip if this category was asked in the last 2 questions (unless it's the only option)
+        if q.category in recent_categories[-2:]:
+            # Apply a penalty but don't exclude completely
+            category_penalty = 0.15
+        else:
+            category_penalty = 0.0
 
         # gather option score arrays
         opt_scores = [(o.it_score, o.cs_score, o.is_score) for o in q.options]
@@ -445,8 +554,15 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
 
         # Combine with weights (tunable)
         # Give more weight to distinction and information gain
-        utility = (avg_var * 0.25) + (avg_distinction * 0.45) + (info_gain * 0.30)
-        utilities.append((qid_int, utility))
+        base_utility = (avg_var * 0.25) + (avg_distinction * 0.45) + (info_gain * 0.30)
+        
+        # Apply category diversity bonus/penalty
+        # If this category hasn't been tested much, give a small bonus
+        category_count = category_question_counts.get(q.category, 0) if q.category in ['IT', 'CS', 'IS'] else 0
+        diversity_bonus = 0.05 if category_count < 2 else 0.0
+        
+        utility = base_utility * (1.0 - category_penalty) + diversity_bonus
+        utilities.append((qid_int, utility, q.category))
 
     if not utilities:
         # No unanswered questions left -> stop
@@ -458,7 +574,7 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
         }
 
     utilities.sort(key=lambda x: x[1], reverse=True)
-    selected_qid, selected_utility = utilities[0]
+    selected_qid, selected_utility, selected_category = utilities[0]
 
     return {
         "stop": False,
