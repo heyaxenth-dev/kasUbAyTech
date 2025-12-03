@@ -240,4 +240,7 @@ include './includes/sidebar.php';
         </div>
     </section>
 
+
 </main><!-- End #main -->
+
+<?php include './includes/footer.php'; ?>

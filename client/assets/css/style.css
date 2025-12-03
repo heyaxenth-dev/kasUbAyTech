@@ -62,12 +62,12 @@ body {
 }
 
 a {
-	color: #4154f1;
+	color: #04254c;
 	text-decoration: none;
 }
 
 a:hover {
-	color: #717ff5;
+	color: #26e4fe;
 	text-decoration: none;
 }
 
@@ -119,7 +119,7 @@ h6 {
 	right: 15px;
 	bottom: 15px;
 	z-index: 99999;
-	background: #4154f1;
+	background: #04254c;
 	width: 40px;
 	height: 40px;
 	border-radius: 4px;
@@ -133,7 +133,7 @@ h6 {
 }
 
 .back-to-top:hover {
-	background: #6776f4;
+	background: #012970;
 	color: #fff;
 }
 
@@ -352,7 +352,7 @@ h6 {
 
 .accordion-flush .accordion-button:not(.collapsed) {
 	box-shadow: none;
-	color: #4154f1;
+	color: #04254c;
 }
 
 .accordion-flush .accordion-body {
@@ -400,13 +400,13 @@ h6 {
 
 .nav-tabs-bordered .nav-link:hover,
 .nav-tabs-bordered .nav-link:focus {
-	color: #4154f1;
+	color: #04254c;
 }
 
 .nav-tabs-bordered .nav-link.active {
 	background-color: #fff;
-	color: #4154f1;
-	border-bottom: 2px solid #4154f1;
+	color: #04254c;
+	border-bottom: 2px solid #04254c;
 }
 
 /*--------------------------------------------------------------
@@ -740,7 +740,7 @@ h6 {
 	align-items: center;
 	font-size: 15px;
 	font-weight: 600;
-	color: #4154f1;
+	color: #04254c;
 	transition: 0.3;
 	background: #f6f9ff;
 	padding: 10px 15px;
@@ -750,7 +750,7 @@ h6 {
 .sidebar-nav .nav-link i {
 	font-size: 16px;
 	margin-right: 10px;
-	color: #4154f1;
+	color: #04254c;
 }
 
 .sidebar-nav .nav-link.collapsed {
@@ -763,12 +763,12 @@ h6 {
 }
 
 .sidebar-nav .nav-link:hover {
-	color: #4154f1;
+	color: #04254c;
 	background: #f6f9ff;
 }
 
 .sidebar-nav .nav-link:hover i {
-	color: #4154f1;
+	color: #04254c;
 }
 
 .sidebar-nav .nav-link .bi-chevron-down {
@@ -806,11 +806,11 @@ h6 {
 
 .sidebar-nav .nav-content a:hover,
 .sidebar-nav .nav-content a.active {
-	color: #4154f1;
+	color: #04254c;
 }
 
 .sidebar-nav .nav-content a.active i {
-	background-color: #4154f1;
+	background-color: #04254c;
 }
 
 /*--------------------------------------------------------------
@@ -833,7 +833,7 @@ h6 {
 
 .dashboard .filter .icon:hover,
 .dashboard .filter .icon:focus {
-	color: #4154f1;
+	color: #04254c;
 }
 
 .dashboard .filter .dropdown-header {
@@ -877,7 +877,7 @@ h6 {
 }
 
 .dashboard .sales-card .card-icon {
-	color: #4154f1;
+	color: #04254c;
 	background: #f6f6fe;
 }
 
@@ -962,7 +962,7 @@ h6 {
 }
 
 .dashboard .news h4 a:hover {
-	color: #4154f1;
+	color: #04254c;
 }
 
 .dashboard .news p {
@@ -1110,7 +1110,7 @@ h6 {
 .faq .basic h6 {
 	font-size: 18px;
 	font-weight: 600;
-	color: #4154f1;
+	color: #04254c;
 }
 
 .faq .basic p {
@@ -1127,7 +1127,7 @@ h6 {
 .contact .info-box i {
 	font-size: 38px;
 	line-height: 0;
-	color: #4154f1;
+	color: #04254c;
 }
 
 .contact .info-box h3 {
@@ -1194,7 +1194,7 @@ h6 {
 
 .contact .php-email-form input:focus,
 .contact .php-email-form textarea:focus {
-	border-color: #4154f1;
+	border-color: #04254c;
 }
 
 .contact .php-email-form input {
@@ -1206,7 +1206,7 @@ h6 {
 }
 
 .contact .php-email-form button[type='submit'] {
-	background: #4154f1;
+	background: #04254c;
 	border: 0;
 	padding: 10px 30px;
 	color: #fff;
@@ -1238,7 +1238,7 @@ h6 {
 .error-404 h1 {
 	font-size: 180px;
 	font-weight: 700;
-	color: #4154f1;
+	color: #04254c;
 	margin-bottom: 0;
 	line-height: 150px;
 }
@@ -1286,4 +1286,76 @@ h6 {
 	text-align: center;
 	font-size: 13px;
 	color: #d2dbec;
+}
+
+.disclosure-section {
+	background: linear-gradient(135deg, #04254c 0%, #012970 100%);
+	min-height: 100vh;
+	padding: 2rem 0;
+}
+
+.disclosure-card {
+	background: white;
+	border-radius: 15px;
+	box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+	padding: 2.5rem;
+	margin: 2rem 0;
+}
+
+.info-icon {
+	font-size: 3rem;
+	color: #04254c;
+	margin-bottom: 1rem;
+}
+
+.feature-item {
+	padding: 1rem;
+	margin: 0.5rem 0;
+	background: #f8f9fa;
+	border-radius: 8px;
+	border-left: 4px solid #04254c;
+}
+
+.course-card {
+	border: 2px solid #e9ecef;
+	border-radius: 10px;
+	padding: 1.5rem;
+	margin: 1rem 0;
+	transition: all 0.3s ease;
+}
+
+.course-card:hover {
+	border-color: #04254c;
+	box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+}
+
+.course-card h5 {
+	color: #04254c;
+	margin-bottom: 0.5rem;
+}
+
+.start-btn {
+	background: linear-gradient(135deg, #04254c 0%, #01eef1 100%);
+	border: none;
+	padding: 1rem 3rem;
+	font-size: 1.2rem;
+	font-weight: 600;
+	border-radius: 50px;
+	color: white;
+	transition: all 0.3s ease;
+	box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.start-btn:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 8px 20px rgba(102, 126, 234, 0.6);
+	color: white;
+}
+
+.highlight-box {
+	background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+	border-left: 4px solid #04254c;
+	padding: 1.5rem;
+	border-radius: 8px;
+	margin: 1.5rem 0;
 }

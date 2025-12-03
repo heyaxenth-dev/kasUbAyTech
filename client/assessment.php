@@ -42,7 +42,7 @@ $conn->close();
     <meta content="" name="keywords">
 
     <!-- Favicons -->
-    <link href="assets/img/favicon.png" rel="icon">
+    <link href="assets/img/favicon.ico" rel="icon">
     <link href="assets/img/apple-touch-icon.png" rel="apple-touch-icon">
 
     <!-- Google Fonts -->
@@ -88,7 +88,9 @@ $conn->close();
 
                                 <div class="card-body" id="quizCard">
                                     <h5 class="card-title text-center pb-0 fs-4">Course Compatibility Assessment</h5>
-                                    <p class="text-center small">Welcome, <?php echo htmlspecialchars($client['firstname'] . ' ' . $client['lastname']); ?></p>
+                                    <p class="text-center small">Welcome,
+                                        <?php echo htmlspecialchars($client['firstname'] . ' ' . $client['lastname']); ?>
+                                    </p>
                                     <p class="text-center small">Answer the questions one by one</p>
 
                                     <form id="quizForm">
@@ -101,28 +103,34 @@ $conn->close();
                                             $inputType = $isMultiple ? 'checkbox' : 'radio';
                                             $inputName = $isMultiple ? "q{$qId}[]" : "q{$qId}";
                                         ?>
-                                        <div class="question d-none" id="question<?php echo $qId; ?>" data-question-id="<?php echo $qId; ?>" data-type="<?php echo $question['question_type']; ?>">
-                                            <h6 class="mb-3"><?php echo $qIndex; ?>. <?php echo htmlspecialchars($question['question_text']); ?></h6>
+                                        <div class="question d-none" id="question<?php echo $qId; ?>"
+                                            data-question-id="<?php echo $qId; ?>"
+                                            data-type="<?php echo $question['question_type']; ?>">
+                                            <h6 class="mb-3"><?php echo $qIndex; ?>.
+                                                <?php echo htmlspecialchars($question['question_text']); ?></h6>
                                             <?php foreach ($question['options'] as $option): ?>
                                             <div class="form-check">
-                                                <input class="form-check-input" type="<?php echo $inputType; ?>" 
-                                                    name="<?php echo $inputName; ?>" 
+                                                <input class="form-check-input" type="<?php echo $inputType; ?>"
+                                                    name="<?php echo $inputName; ?>"
                                                     id="q<?php echo $qId; ?>_opt<?php echo $option['id']; ?>"
-                                                    value="<?php echo $option['id']; ?>" 
+                                                    value="<?php echo $option['id']; ?>"
                                                     <?php echo !$isMultiple ? 'required' : ''; ?>>
-                                                <label class="form-check-label" for="q<?php echo $qId; ?>_opt<?php echo $option['id']; ?>">
+                                                <label class="form-check-label"
+                                                    for="q<?php echo $qId; ?>_opt<?php echo $option['id']; ?>">
                                                     <?php echo htmlspecialchars($option['option_text']); ?>
                                                 </label>
                                             </div>
                                             <?php endforeach; ?>
                                             <?php if ($qIndex < count($questions)): ?>
-                                            <button type="button" class="btn btn-primary w-100 mt-3 next-btn">Next</button>
+                                            <button type="button"
+                                                class="btn btn-primary w-100 mt-3 next-btn">Next</button>
                                             <?php else: ?>
-                                            <button type="submit" class="btn btn-success w-100 mt-3">Submit Answers</button>
+                                            <button type="submit" class="btn btn-success w-100 mt-3">Submit
+                                                Answers</button>
                                             <?php endif; ?>
                                         </div>
                                         <?php endforeach; ?>
-                                        
+
                                         <?php if (count($questions) == 0): ?>
                                         <div class="alert alert-warning">
                                             No questions available. Please contact the administrator.
@@ -147,6 +155,7 @@ $conn->close();
                                 transform: translateX(0);
                                 opacity: 1;
                             }
+
                             to {
                                 transform: translateX(-100%);
                                 opacity: 0;
@@ -158,6 +167,7 @@ $conn->close();
                                 transform: translateX(100%);
                                 opacity: 0;
                             }
+
                             to {
                                 transform: translateX(0);
                                 opacity: 1;
@@ -223,9 +233,10 @@ $conn->close();
 
                                 // Validate current question
                                 const questionType = currentQ.dataset.type;
-                                const inputs = currentQ.querySelectorAll('input[type="radio"], input[type="checkbox"]');
+                                const inputs = currentQ.querySelectorAll(
+                                    'input[type="radio"], input[type="checkbox"]');
                                 let hasSelection = false;
-                                
+
                                 if (questionType === 'multiple') {
                                     hasSelection = Array.from(inputs).some(input => input.checked);
                                 } else {
@@ -246,10 +257,12 @@ $conn->close();
                                     quizCard.classList.remove('slide-out-left');
                                     quizCard.classList.add('slide-in-right');
 
-                                    quizCard.addEventListener('animationend', function handler2() {
-                                        quizCard.classList.remove('slide-in-right');
-                                        quizCard.removeEventListener('animationend', handler2);
-                                    });
+                                    quizCard.addEventListener('animationend',
+                                        function handler2() {
+                                            quizCard.classList.remove('slide-in-right');
+                                            quizCard.removeEventListener('animationend',
+                                                handler2);
+                                        });
 
                                     currentIndex++;
                                     quizCard.removeEventListener('animationend', handler);
@@ -269,13 +282,16 @@ $conn->close();
                                 const questionId = question.dataset.questionId;
                                 const questionType = question.dataset.type;
                                 const inputs = question.querySelectorAll('input:checked');
-                                
-                                const optionIds = Array.from(inputs).map(input => parseInt(input.value));
-                                
+
+                                const optionIds = Array.from(inputs).map(input => parseInt(input
+                                    .value));
+
                                 if (optionIds.length > 0) {
                                     answers.push({
                                         question_id: parseInt(questionId),
-                                        option_ids: questionType === 'multiple' ? optionIds : [optionIds[0]]
+                                        option_ids: questionType === 'multiple' ? optionIds : [
+                                            optionIds[0]
+                                        ]
                                     });
                                 }
                             });
@@ -288,19 +304,20 @@ $conn->close();
                             quizCard.classList.add('slide-out-left');
 
                             quizCard.addEventListener('animationend', function handler() {
-                                quizCard.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3">Processing your results...</p></div>';
+                                quizCard.innerHTML =
+                                    '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3">Processing your results...</p></div>';
                                 quizCard.classList.remove('slide-out-left');
                                 quizCard.classList.add('slide-in-right');
                                 quizCard.removeEventListener('animationend', handler);
 
                                 fetch('submit_assessment.php', {
-                                    method: 'POST',
-                                    body: formData
-                                })
-                                .then(response => response.json())
-                                .then(data => {
-                                    if (data.success) {
-                                        quizCard.innerHTML = `
+                                        method: 'POST',
+                                        body: formData
+                                    })
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success) {
+                                            quizCard.innerHTML = `
                                             <div class="text-center">
                                                 <h5 class="mb-4">🎉 Assessment Completed!</h5>
                                                 <h6 class="mb-3">Your Compatibility Scores:</h6>
@@ -336,26 +353,26 @@ $conn->close();
                                                 <a href="../index.php" class="btn btn-primary">Return to Home</a>
                                             </div>
                                         `;
-                                    } else {
-                                        quizCard.innerHTML = `
+                                        } else {
+                                            quizCard.innerHTML = `
                                             <div class="text-center">
                                                 <h5 class="text-danger">Error</h5>
                                                 <p>${data.error || 'An error occurred while processing your assessment.'}</p>
                                                 <a href="../index.php" class="btn btn-primary">Return to Home</a>
                                             </div>
                                         `;
-                                    }
-                                })
-                                .catch(error => {
-                                    console.error('Error:', error);
-                                    quizCard.innerHTML = `
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error:', error);
+                                        quizCard.innerHTML = `
                                         <div class="text-center">
                                             <h5 class="text-danger">Error</h5>
                                             <p>An error occurred. Please try again later.</p>
                                             <a href="../index.php" class="btn btn-primary">Return to Home</a>
                                         </div>
                                     `;
-                                });
+                                    });
                             });
                         });
                         </script>

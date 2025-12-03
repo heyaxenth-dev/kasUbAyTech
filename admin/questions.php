@@ -29,7 +29,7 @@ include './includes/sidebar.php';
                         </div>
 
                         <div id="questionsTable">
-                            <table class="table table-striped">
+                            <table class="table table-striped questions-table">
                                 <thead>
                                     <tr>
                                         <th>Order</th>
@@ -41,9 +41,6 @@ include './includes/sidebar.php';
                                     </tr>
                                 </thead>
                                 <tbody id="questionsList">
-                                    <tr>
-                                        <td colspan="6" class="text-center">Loading...</td>
-                                    </tr>
                                 </tbody>
                             </table>
                         </div>
@@ -164,11 +161,29 @@ include './includes/sidebar.php';
 <script>
 let questions = [];
 let editingId = null;
+let questionsDataTable = null;
 
 // Load questions on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadQuestions();
 });
+
+function initQuestionsDataTable() {
+    const tableEl = document.querySelector('#questionsTable table');
+    if (!tableEl || typeof simpleDatatables === 'undefined') {
+        return;
+    }
+
+    // Destroy existing instance if any (e.g., after save/delete)
+    if (questionsDataTable) {
+        questionsDataTable.destroy();
+        questionsDataTable = null;
+    }
+
+    questionsDataTable = new simpleDatatables.DataTable(tableEl, {
+        perPageSelect: [5, 10, 15, ['All', -1]]
+    });
+}
 
 function loadQuestions() {
     fetch('api/questions.php')
@@ -176,6 +191,7 @@ function loadQuestions() {
         .then(data => {
             questions = data;
             renderQuestions();
+            initQuestionsDataTable();
         })
         .catch(error => console.error('Error:', error));
 }

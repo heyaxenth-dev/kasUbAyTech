@@ -127,7 +127,7 @@ include './includes/sidebar.php';
 
         <!-- Charts -->
         <div class="row">
-            <div class="col-lg-6">
+            <div class="col-lg-8">
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">Average Scores by Course</h5>
@@ -136,7 +136,7 @@ include './includes/sidebar.php';
                 </div>
             </div>
 
-            <div class="col-lg-6">
+            <div class="col-lg-4">
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">Course Recommendations</h5>
@@ -203,50 +203,62 @@ include './includes/sidebar.php';
 </main>
 
 <script>
-// Average Scores Chart
-const avgCtx = document.getElementById('avgScoresChart').getContext('2d');
-new Chart(avgCtx, {
-    type: 'bar',
-    data: {
-        labels: ['IT', 'CS', 'IS'],
-        datasets: [{
-            label: 'Average Score (%)',
-            data: [
-                <?php echo number_format($avg_it ?? 0, 2); ?>,
-                <?php echo number_format($avg_cs ?? 0, 2); ?>,
-                <?php echo number_format($avg_is ?? 0, 2); ?>
-            ],
-            backgroundColor: ['#4154f1', '#2eca6a', '#ff771d']
-        }]
-    },
-    options: {
-        responsive: true,
-        scales: {
-            y: {
-                beginAtZero: true,
-                max: 100
-            }
-        }
+// Defer chart initialization until after all vendor scripts (including Chart.js) are loaded
+window.addEventListener('load', function() {
+    if (typeof Chart === 'undefined') {
+        return; // Chart.js not available
     }
-});
 
-// Recommendations Chart
-const recCtx = document.getElementById('recommendationsChart').getContext('2d');
-new Chart(recCtx, {
-    type: 'doughnut',
-    data: {
-        labels: ['IT', 'CS', 'IS'],
-        datasets: [{
-            data: [
-                <?php echo $stats['recommended_it'] ?? 0; ?>,
-                <?php echo $stats['recommended_cs'] ?? 0; ?>,
-                <?php echo $stats['recommended_is'] ?? 0; ?>
-            ],
-            backgroundColor: ['#4154f1', '#2eca6a', '#ff771d']
-        }]
-    },
-    options: {
-        responsive: true
+    const avgCanvas = document.getElementById('avgScoresChart');
+    const recCanvas = document.getElementById('recommendationsChart');
+
+    if (avgCanvas) {
+        const avgCtx = avgCanvas.getContext('2d');
+        new Chart(avgCtx, {
+            type: 'bar',
+            data: {
+                labels: ['IT', 'CS', 'IS'],
+                datasets: [{
+                    label: 'Average Score (%)',
+                    data: [
+                        <?php echo number_format($avg_it ?? 0, 2); ?>,
+                        <?php echo number_format($avg_cs ?? 0, 2); ?>,
+                        <?php echo number_format($avg_is ?? 0, 2); ?>
+                    ],
+                    backgroundColor: ['#4154f1', '#2eca6a', '#ff771d']
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+    }
+
+    if (recCanvas) {
+        const recCtx = recCanvas.getContext('2d');
+        new Chart(recCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['IT', 'CS', 'IS'],
+                datasets: [{
+                    data: [
+                        <?php echo $stats['recommended_it'] ?? 0; ?>,
+                        <?php echo $stats['recommended_cs'] ?? 0; ?>,
+                        <?php echo $stats['recommended_is'] ?? 0; ?>
+                    ],
+                    backgroundColor: ['#4154f1', '#2eca6a', '#ff771d']
+                }]
+            },
+            options: {
+                responsive: true
+            }
+        });
     }
 });
 </script>
