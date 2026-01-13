@@ -120,23 +120,42 @@ class ExamRepository
      * @param int $sessionId
      * @param int $questionId
      * @param string $selectedOption 'A', 'B', 'C', or 'D'
-     * @param string $category Question category
+     * @param string $category Question category ('DIAGNOSTIC' or 'ADAPTIVE')
      * @param bool $isCorrect Whether the answer is correct
      * @param int $pointsAwarded Points awarded for this answer
+     * @param string $courseTag Course tag ('IT', 'IS', or 'CS') - CAT-lite structure
      * @return int|false Answer ID on success, false on failure
      */
-    public function saveAnswer($sessionId, $questionId, $selectedOption, $category, $isCorrect, $pointsAwarded = 0)
+    public function saveAnswer($sessionId, $questionId, $selectedOption, $category, $isCorrect, $pointsAwarded = 0, $courseTag = null)
     {
+        // If courseTag not provided, get it from the question
+        if ($courseTag === null) {
+            $qStmt = $this->conn->prepare("SELECT course_tag FROM questions WHERE id = ?");
+            if ($qStmt) {
+                $qStmt->bind_param("i", $questionId);
+                $qStmt->execute();
+                $qResult = $qStmt->get_result();
+                if ($qRow = $qResult->fetch_assoc()) {
+                    $courseTag = $qRow['course_tag'] ?? 'IT';
+                } else {
+                    $courseTag = 'IT'; // Default fallback
+                }
+                $qStmt->close();
+            } else {
+                $courseTag = 'IT'; // Default fallback
+            }
+        }
+        
         $stmt = $this->conn->prepare(
-            "INSERT INTO exam_answers (session_id, question_id, selected_option, is_correct, category, points_awarded) 
-             VALUES (?, ?, ?, ?, ?, ?)"
+            "INSERT INTO exam_answers (session_id, question_id, selected_option, is_correct, category, course_tag, points_awarded) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)"
         );
         
         if (!$stmt) {
             return false;
         }
 
-        $stmt->bind_param("iisisi", $sessionId, $questionId, $selectedOption, $isCorrect, $category, $pointsAwarded);
+        $stmt->bind_param("iisisis", $sessionId, $questionId, $selectedOption, $isCorrect, $category, $courseTag, $pointsAwarded);
         
         if ($stmt->execute()) {
             $answerId = $stmt->insert_id;

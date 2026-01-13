@@ -39,6 +39,7 @@ if (!$session) {
 }
 
 // Get student answers with question details (using new exam_answers table)
+// CAT-lite: Include course_tag and category (phase) information
 $answers_query = "SELECT 
         ea.*,
         q.question_text,
@@ -46,7 +47,8 @@ $answers_query = "SELECT
         q.option_a,
         q.option_b,
         q.option_c,
-        q.option_d
+        q.option_d,
+        q.course_tag AS question_course_tag
     FROM exam_answers ea
     JOIN questions q ON ea.question_id = q.id
     WHERE ea.session_id = ?
@@ -197,10 +199,11 @@ include './includes/sidebar.php';
                                     <?php echo htmlspecialchars($answer['question_text']); ?></h6>
                                 <p class="text-muted small">
                                     Type: <?php echo ucfirst($answer['question_type']); ?> |
-                                    Category: <?php echo htmlspecialchars($answer['category']); ?> |
+                                    Phase: <span class="badge bg-<?php echo $answer['category'] === 'DIAGNOSTIC' ? 'info' : 'warning'; ?>"><?php echo htmlspecialchars($answer['category']); ?></span> |
+                                    Course: <span class="badge bg-primary"><?php echo htmlspecialchars($answer['course_tag'] ?? $answer['question_course_tag'] ?? 'N/A'); ?></span> |
                                     Selected: <?php echo htmlspecialchars($selectedLabel); ?> -
                                     <?php echo htmlspecialchars($selectedText); ?> |
-                                    <?php echo $isCorrect ? 'Correct' : 'Incorrect'; ?>
+                                    <?php echo $isCorrect ? '<span class="text-success">Correct</span>' : '<span class="text-danger">Incorrect</span>'; ?>
                                 </p>
                                 <ul class="list-group">
                                     <?php

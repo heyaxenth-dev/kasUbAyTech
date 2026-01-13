@@ -33,7 +33,7 @@ CORS(app)
 # ------------- CONFIG -------------
 DB_CONFIG = {
     "host": "localhost",
-    "database": "kasubaytech_db",
+    "database": "kasubaytech_catlite_db",  # Updated to CAT-lite database
     "user": "root",
     "password": "",
     "pool_name": "adaptive_pool",
@@ -41,13 +41,18 @@ DB_CONFIG = {
     "autocommit": True
 }
 
-# Algorithm tuning
-DIAGNOSTIC_COUNT = 3               # number of diagnostic questions to ask first
-MAX_QUESTIONS = 20                 # hard cap for the assessment
+# Algorithm tuning - Re-evaluated Adaptive Algorithm (CAT-lite)
+PHASE_1_QUESTIONS = 5               # Questions 1-5: Diagnostic phase (mixed IT/IS/CS)
+PHASE_2_QUESTIONS = 10              # Questions 6-10: Adaptive Round 1
+PHASE_3_QUESTIONS = 20              # Questions 11-20: Adaptive Round 2
+MAX_QUESTIONS = 20                  # hard cap for the assessment
 CONFIDENCE_THRESHOLD = 0.80        # 0..1 - if top score >= this and gap >= GAP_THRESHOLD => stop
 GAP_THRESHOLD = 0.15               # minimum relative gap between top and second (15%)
 SCORE_SCALE = 100.0                # scale normalized scores to 0-100
 CACHE_TTL = 300                    # seconds to refresh cached questions/options
+
+# Legacy constant for backward compatibility (now Phase 1 uses 5 questions)
+DIAGNOSTIC_COUNT = 5               # Updated to match Phase 1 requirement
 # -----------------------------------
 
 # ------------- DB POOL -------------
@@ -85,7 +90,8 @@ class Question:
     id: int
     question_text: str
     question_type: str    # 'single' or 'multiple' or 'text' - we use 'single'/'multiple'
-    category: str         # 'DIAGNOSTIC'/'IT'/'CS'/'IS'
+    category: str         # 'DIAGNOSTIC' or 'ADAPTIVE' (exam phase)
+    course_tag: str       # 'IT', 'IS', or 'CS' (course identity) - CAT-lite structure
     is_correct_answer: Optional[int] = None
     order_number: int = 0
     options: List[QuestionOption] = field(default_factory=list)
@@ -109,9 +115,9 @@ def refresh_cache_if_needed():
             conn = get_conn()
             cursor = conn.cursor(dictionary=True)
 
-            # Fetch questions
+            # Fetch questions with course_tag (CAT-lite structure)
             cursor.execute("""
-                SELECT id, question_text, question_type, category, is_correct_answer, order_number
+                SELECT id, question_text, question_type, category, course_tag, is_correct_answer, order_number
                 FROM questions
                 WHERE is_active = 1
                 ORDER BY order_number, id
@@ -141,6 +147,7 @@ def refresh_cache_if_needed():
                     question_text=r['question_text'] or "",
                     question_type=r.get('question_type', 'single') or 'single',
                     category=(r.get('category') or 'DIAGNOSTIC').upper(),
+                    course_tag=(r.get('course_tag') or 'IT').upper(),  # CAT-lite: course identity
                     is_correct_answer=(int(r['is_correct_answer']) if r.get('is_correct_answer') is not None else None),
                     order_number=int(r.get('order_number') or 0),
                     options=[]
@@ -293,6 +300,126 @@ def approx_information_gain(current_scores_norm: Dict[str, float], option_scores
 # -----------------------------------
 
 
+# ------------- COURSE RANKING UTILITIES -------------
+def determine_course_rankings(scores: Dict[str, float]) -> Dict[str, Any]:
+    """
+    Determine dominant, secondary, and weakest courses from current scores.
+    Supports ties - if two courses are tied, both are marked as dominant.
+    
+    Returns:
+        {
+            'dominant': ['IT'] or ['IT', 'CS'] if tied,
+            'secondary': 'CS' or 'IS',
+            'weakest': 'IS',
+            'has_tie': bool,
+            'tied_courses': [] if no tie, or list of tied courses
+        }
+    """
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    
+    if len(sorted_scores) < 3:
+        # Fallback if not all courses have scores
+        return {
+            'dominant': [sorted_scores[0][0]] if sorted_scores else ['IT'],
+            'secondary': sorted_scores[1][0] if len(sorted_scores) > 1 else 'CS',
+            'weakest': sorted_scores[2][0] if len(sorted_scores) > 2 else 'IS',
+            'has_tie': False,
+            'tied_courses': []
+        }
+    
+    top_course, top_score = sorted_scores[0]
+    second_course, second_score = sorted_scores[1]
+    third_course, third_score = sorted_scores[2]
+    
+    # Check for ties (within 0.1 point difference to account for rounding)
+    TIE_THRESHOLD = 0.1
+    dominant = [top_course]
+    has_tie = False
+    tied_courses = []
+    
+    # Check if top and second are tied
+    if abs(top_score - second_score) <= TIE_THRESHOLD:
+        dominant.append(second_course)
+        has_tie = True
+        tied_courses = [top_course, second_course]
+        # If all three are tied (rare)
+        if abs(second_score - third_score) <= TIE_THRESHOLD:
+            dominant.append(third_course)
+            tied_courses = [top_course, second_course, third_course]
+            return {
+                'dominant': dominant,
+                'secondary': second_course,  # Still need to pick one for secondary
+                'weakest': third_course,
+                'has_tie': True,
+                'tied_courses': tied_courses
+            }
+        # Two-way tie at top
+        return {
+            'dominant': dominant,
+            'secondary': second_course,  # In two-way tie, second is also dominant
+            'weakest': third_course,
+            'has_tie': True,
+            'tied_courses': tied_courses
+        }
+    
+    # Check if second and third are tied (but not top)
+    if abs(second_score - third_score) <= TIE_THRESHOLD:
+        # Top is clear dominant, second and third are tied
+        return {
+            'dominant': dominant,
+            'secondary': second_course,  # Pick one from the tie
+            'weakest': third_course,
+            'has_tie': False,  # No tie at top level
+            'tied_courses': []
+        }
+    
+    # No ties
+    return {
+        'dominant': dominant,
+        'secondary': second_course,
+        'weakest': third_course,
+        'has_tie': has_tie,
+        'tied_courses': tied_courses
+    }
+
+
+def get_phase_from_question_count(answered_count: int) -> str:
+    """
+    Determine which phase we're in based on number of answered questions.
+    
+    Phase 1: Questions 1-5 (0-4 answered)
+    Phase 2: Questions 6-10 (5-9 answered)
+    Phase 3: Questions 11-20 (10-19 answered)
+    """
+    if answered_count < PHASE_1_QUESTIONS:
+        return 'PHASE_1'
+    elif answered_count < PHASE_2_QUESTIONS:
+        return 'PHASE_2'
+    else:
+        return 'PHASE_3'
+
+
+def count_questions_by_category_in_phase(answered_questions: List[Dict[str, Any]], 
+                                         phase_start: int, phase_end: int,
+                                         target_category: str) -> int:
+    """
+    Count how many questions of a specific category have been asked in a given phase.
+    """
+    count = 0
+    phase_answers = answered_questions[phase_start:phase_end]
+    
+    for ans in phase_answers:
+        qid = ans.get('question_id')
+        if qid:
+            q = get_question_by_id(int(qid))
+            # CAT-lite: Check course_tag instead of category
+            if q and hasattr(q, 'course_tag') and q.course_tag == target_category:
+                count += 1
+    
+    return count
+# -----------------------------------
+
+
 # ------------- UTILITY: SELECT NEXT QUESTION -------------
 def get_diagnostic_question_category_bias(q: Question) -> Optional[str]:
     """
@@ -326,48 +453,44 @@ def get_diagnostic_question_category_bias(q: Question) -> Optional[str]:
 
 def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_question_ids: Optional[List[int]] = None) -> Optional[Dict[str, Any]]:
     """
-    Core decision logic:
-    1. If no questions answered or diagnostic count < DIAGNOSTIC_COUNT -> pick balanced DIAGNOSTIC questions
-    2. Compute category performance and identify categories with high wrong ratio
-    3. If any category needs testing (wrong ratio > threshold), prefer that category
-    4. Else use utility ranking (variance + distinction + approx info gain)
-    5. Apply stopping rules: confidence threshold or max questions reached
+    Re-evaluated Adaptive Algorithm (CAT-lite) - Phase-based selection logic:
+    
+    Phase 1 (Questions 1-5): Diagnostic phase
+    - Mixed IT/IS/CS questions
+    - Each question has a course_tag
+    - Correct answer → +1 to that course
+    - Do NOT lock dominance yet
+    - Allow ties
+    
+    Phase 2 (Questions 6-10): Adaptive Round 1
+    - 3 dominant, 1 secondary, 1 weakest
+    - Continue accumulating scores
+    - Re-evaluation checkpoint after Q10
+    
+    Phase 3 (Questions 11-20): Adaptive Round 2
+    - If one dominant: 6 dominant, 3 secondary, 1 weakest
+    - If tie between two: 5 questions each, 1 question for third
+    - Continue scoring normally
     """
 
     refresh_cache_if_needed()
     all_qids = all_question_ids or get_all_question_ids()
     answered_ids = [int(q.get('question_id')) for q in answered_questions if q.get('question_id')]
+    answered_count = len(answered_questions)
 
-    # 1) Determine diagnostic progress and track which categories have been covered
-    # diagnostic questions are those with category 'DIAGNOSTIC'
-    diag_answered = 0
-    covered_categories = set()  # Track which categories (IT/CS/IS) have been covered by diagnostic questions
-    
-    for q in answered_questions:
-        qid = q.get('question_id')
-        qobj = get_question_by_id(int(qid)) if qid else None
-        if qobj and qobj.category == 'DIAGNOSTIC':
-            diag_answered += 1
-            # Determine which category this diagnostic question favors
-            bias = get_diagnostic_question_category_bias(qobj)
-            if bias:
-                covered_categories.add(bias)
-
-    # Quick compute raw + normalized scores
+    # Compute current scores
     raw_scores = compute_raw_scores(answered_questions)
     norm_scores = normalize_scores(raw_scores)  # 0..100
-    # For confidence math, use 0..1 scale
-    norm_scores_01 = {k: v / SCORE_SCALE for k, v in norm_scores.items()}
+    norm_scores_01 = {k: v / SCORE_SCALE for k, v in norm_scores.items()}  # 0..1 scale
 
     # Stopping rules check
-    #  - If answered count >= 1, check gap between top and second
     sorted_scores = sorted(norm_scores_01.items(), key=lambda x: x[1], reverse=True)
     top_course, top_score = (sorted_scores[0] if sorted_scores else ('IT', 0.0))
     second_course, second_score = (sorted_scores[1] if len(sorted_scores) > 1 else (None, 0.0))
     gap = top_score - second_score if second_course else top_score
 
     # If criteria met: stop and return recommendation
-    if (top_score >= CONFIDENCE_THRESHOLD and gap >= GAP_THRESHOLD) or len(answered_questions) >= MAX_QUESTIONS:
+    if (top_score >= CONFIDENCE_THRESHOLD and gap >= GAP_THRESHOLD) or answered_count >= MAX_QUESTIONS:
         return {
             "stop": True,
             "reason": "confidence" if top_score >= CONFIDENCE_THRESHOLD and gap >= GAP_THRESHOLD else "max_questions",
@@ -375,26 +498,36 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
             "recommended_course": top_course
         }
 
-    # If still in diagnostic phase -> select balanced diagnostic questions
-    if diag_answered < DIAGNOSTIC_COUNT:
-        # Determine which category we need to cover next
-        # Priority: IT (0), CS (1), IS (2) - ensure one of each
-        target_categories = ['IT', 'CS', 'IS']
-        needed_categories = [cat for cat in target_categories if cat not in covered_categories]
+    # Determine current phase
+    current_phase = get_phase_from_question_count(answered_count)
+
+    # ========== PHASE 1: Diagnostic (Questions 1-5) ==========
+    if current_phase == 'PHASE_1':
+        # Phase 1: Mixed IT/IS/CS diagnostic questions
+        # Track which categories have been covered by diagnostic questions
+        covered_categories = set()
+        for q in answered_questions:
+            qid = q.get('question_id')
+            qobj = get_question_by_id(int(qid)) if qid else None
+            if qobj and qobj.category == 'DIAGNOSTIC':
+                bias = get_diagnostic_question_category_bias(qobj)
+                if bias:
+                    covered_categories.add(bias)
         
-        # Collect all available diagnostic questions
+        # Collect available diagnostic questions
         available_diag = []
         for qid in all_qids:
             q = get_question_by_id(int(qid))
-            if not q:
-                continue
-            if q.id in answered_ids:
+            if not q or q.id in answered_ids:
                 continue
             if q.category == 'DIAGNOSTIC':
                 bias = get_diagnostic_question_category_bias(q)
                 available_diag.append((q, bias))
         
-        # If we have specific categories to cover, prioritize those
+        # Try to ensure balanced coverage (one of each IT/CS/IS)
+        target_categories = ['IT', 'CS', 'IS']
+        needed_categories = [cat for cat in target_categories if cat not in covered_categories]
+        
         if needed_categories:
             for target_cat in needed_categories:
                 for q, bias in available_diag:
@@ -403,102 +536,52 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
                             "stop": False,
                             "next_question_id": q.id,
                             "current_scores": norm_scores,
-                            "reason": f"diagnostic_balanced_{target_cat}"
+                            "reason": f"phase1_diagnostic_{target_cat}"
                         }
         
-        # If no specific category needed or no questions match, pick any available diagnostic
-        # This handles cases where diagnostic questions don't clearly favor a category
-        for q, bias in available_diag:
+        # If all categories covered or no match, pick any available diagnostic
+        if available_diag:
+            q, _ = available_diag[0]
             return {
                 "stop": False,
                 "next_question_id": q.id,
                 "current_scores": norm_scores,
-                "reason": "diagnostic"
+                "reason": "phase1_diagnostic"
             }
         
-        # no more diagnostic available - fall through
+        # No more diagnostic questions - fall through to next phase logic
 
-    # Compute category performance to identify weak areas
-    category_perf = {
-        'IS': {'correct': 0, 'wrong': 0, 'total': 0},
-        'IT': {'correct': 0, 'wrong': 0, 'total': 0},
-        'CS': {'correct': 0, 'wrong': 0, 'total': 0},
-    }
-    # Track which categories have been tested (non-diagnostic questions)
-    tested_categories = set()
-    category_question_counts = {'IT': 0, 'CS': 0, 'IS': 0}  # Count questions per category
-    
-    # To evaluate correctness, we compare answered option(s) with question.is_correct_answer if available
-    for ans in answered_questions:
-        qid = ans.get('question_id')
-        selected = ans.get('option_ids', [])
-        if not qid:
-            continue
-        q = get_question_by_id(int(qid))
-        if not q:
-            continue
-        cat = q.category if q.category in category_perf else 'DIAGNOSTIC'
-        if cat == 'DIAGNOSTIC':
-            continue
-        category_perf[cat]['total'] += 1
-        tested_categories.add(cat)
-        if cat in category_question_counts:
-            category_question_counts[cat] += 1
-        if q.is_correct_answer and int(q.is_correct_answer) in [int(s) for s in selected]:
-            category_perf[cat]['correct'] += 1
+    # ========== PHASE 2: Adaptive Round 1 (Questions 6-10) ==========
+    if current_phase == 'PHASE_2':
+        # Determine course rankings (dominant, secondary, weakest)
+        rankings = determine_course_rankings(norm_scores_01)
+        dominant_courses = rankings['dominant']
+        secondary_course = rankings['secondary']
+        weakest_course = rankings['weakest']
+        
+        # Count questions already asked in Phase 2 (questions 6-10, index 5-9)
+        phase2_start = PHASE_1_QUESTIONS  # 5
+        phase2_end = PHASE_2_QUESTIONS     # 10
+        phase2_answered = answered_count - phase2_start
+        
+        # Target distribution: 3 dominant, 1 secondary, 1 weakest
+        dominant_count = count_questions_by_category_in_phase(answered_questions, phase2_start, answered_count, dominant_courses[0])
+        secondary_count = count_questions_by_category_in_phase(answered_questions, phase2_start, answered_count, secondary_course)
+        weakest_count = count_questions_by_category_in_phase(answered_questions, phase2_start, answered_count, weakest_course)
+        
+        # Determine which category to select next based on distribution
+        target_category = None
+        if dominant_count < 3:
+            target_category = dominant_courses[0]  # Pick first if multiple dominant
+        elif secondary_count < 1:
+            target_category = secondary_course
+        elif weakest_count < 1:
+            target_category = weakest_course
         else:
-            # treat unanswered or wrong as wrong
-            category_perf[cat]['wrong'] += 1
-
-    # After diagnostic phase, ensure we test all three categories before focusing
-    # If we haven't tested all categories yet, prioritize untested ones
-    all_categories = {'IT', 'CS', 'IS'}
-    untested_categories = all_categories - tested_categories
-    
-    if untested_categories:
-        # Prioritize untested categories to ensure balanced testing
-        for target_cat in ['IT', 'CS', 'IS']:  # Test in this order for consistency
-            if target_cat in untested_categories:
-                # Build a candidate list for this category and shuffle it so that
-                # different sessions/users see different non-diagnostic questions first.
-                candidate_ids: List[int] = []
-                for qid in all_qids:
-                    qid_int = int(qid)
-                    if qid_int in answered_ids:
-                        continue
-                    q = get_question_by_id(qid_int)
-                    if not q:
-                        continue
-                    if q.category == target_cat:
-                        candidate_ids.append(q.id)
-
-                if candidate_ids:
-                    random.shuffle(candidate_ids)
-                    next_id = candidate_ids[0]
-                    q_next = get_question_by_id(next_id)
-                    if q_next:
-                        return {
-                            "stop": False,
-                            "next_question_id": q_next.id,
-                            "current_scores": norm_scores,
-                            "reason": f"balance_test_{target_cat}"
-                        }
-
-    # Identify categories with high wrong ratios (>30%)
-    categories_to_test = []
-    for cat, stats in category_perf.items():
-        if stats['total'] == 0:
-            continue
-        wrong_ratio = stats['wrong'] / stats['total']
-        if wrong_ratio > 0.30:
-            categories_to_test.append((cat, wrong_ratio))
-    categories_to_test.sort(key=lambda x: x[1], reverse=True)
-
-    if categories_to_test:
-        # select first question from the top problematic category
-        target_cat = categories_to_test[0][0]
-        # Build and shuffle candidate IDs for this category so the concrete
-        # questions vary across sessions, while the category focus stays the same.
+            # All targets met, default to dominant
+            target_category = dominant_courses[0]
+        
+        # Find available adaptive questions for target course_tag
         candidate_ids: List[int] = []
         for qid in all_qids:
             qid_int = int(qid)
@@ -507,9 +590,10 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
             q = get_question_by_id(qid_int)
             if not q:
                 continue
-            if q.category == target_cat:
+            # CAT-lite: Check category='ADAPTIVE' and course_tag matches
+            if q.category == 'ADAPTIVE' and hasattr(q, 'course_tag') and q.course_tag == target_category:
                 candidate_ids.append(q.id)
-
+        
         if candidate_ids:
             random.shuffle(candidate_ids)
             next_id = candidate_ids[0]
@@ -519,20 +603,103 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
                     "stop": False,
                     "next_question_id": q_next.id,
                     "current_scores": norm_scores,
-                    "reason": f"target_category_{target_cat}"
+                    "reason": f"phase2_adaptive_{target_category}"
+                }
+
+    # ========== RE-EVALUATION CHECKPOINT (After Question 10) ==========
+    # After question 10, we recalculate dominance - this happens automatically
+    # when we enter Phase 3, as we'll recompute rankings based on all answers
+
+    # ========== PHASE 3: Adaptive Round 2 (Questions 11-20) ==========
+    if current_phase == 'PHASE_3':
+        # Re-evaluate course rankings based on all answers (including Phase 1 & 2)
+        rankings = determine_course_rankings(norm_scores_01)
+        dominant_courses = rankings['dominant']
+        secondary_course = rankings['secondary']
+        weakest_course = rankings['weakest']
+        has_tie = rankings['has_tie']
+        
+        # Count questions already asked in Phase 3 (questions 11-20, index 10-19)
+        phase3_start = PHASE_2_QUESTIONS  # 10
+        phase3_answered = answered_count - phase3_start
+        
+        # Determine target distribution based on ties
+        if has_tie and len(dominant_courses) == 2:
+            # Two-way tie: 5 questions each for the two tied courses, 1 for third
+            tied_course1, tied_course2 = dominant_courses[0], dominant_courses[1]
+            tied1_count = count_questions_by_category_in_phase(answered_questions, phase3_start, answered_count, tied_course1)
+            tied2_count = count_questions_by_category_in_phase(answered_questions, phase3_start, answered_count, tied_course2)
+            weakest_count = count_questions_by_category_in_phase(answered_questions, phase3_start, answered_count, weakest_course)
+            
+            # Determine which category to select
+            target_category = None
+            if tied1_count < 5:
+                target_category = tied_course1
+            elif tied2_count < 5:
+                target_category = tied_course2
+            elif weakest_count < 1:
+                target_category = weakest_course
+            else:
+                # All targets met, default to first tied course
+                target_category = tied_course1
+        else:
+            # One dominant course: 6 dominant, 3 secondary, 1 weakest
+            dominant_count = count_questions_by_category_in_phase(answered_questions, phase3_start, answered_count, dominant_courses[0])
+            secondary_count = count_questions_by_category_in_phase(answered_questions, phase3_start, answered_count, secondary_course)
+            weakest_count = count_questions_by_category_in_phase(answered_questions, phase3_start, answered_count, weakest_course)
+            
+            # Determine which category to select
+            target_category = None
+            if dominant_count < 6:
+                target_category = dominant_courses[0]
+            elif secondary_count < 3:
+                target_category = secondary_course
+            elif weakest_count < 1:
+                target_category = weakest_course
+            else:
+                # All targets met, default to dominant
+                target_category = dominant_courses[0]
+        
+        # Find available adaptive questions for target course_tag
+        candidate_ids: List[int] = []
+        for qid in all_qids:
+            qid_int = int(qid)
+            if qid_int in answered_ids:
+                continue
+            q = get_question_by_id(qid_int)
+            if not q:
+                continue
+            # CAT-lite: Check category='ADAPTIVE' and course_tag matches
+            if q.category == 'ADAPTIVE' and hasattr(q, 'course_tag') and q.course_tag == target_category:
+                candidate_ids.append(q.id)
+        
+        if candidate_ids:
+            random.shuffle(candidate_ids)
+            next_id = candidate_ids[0]
+            q_next = get_question_by_id(next_id)
+            if q_next:
+                return {
+                    "stop": False,
+                    "next_question_id": q_next.id,
+                    "current_scores": norm_scores,
+                    "reason": f"phase3_adaptive_{target_category}"
                 }
 
     # Fallback: utility-based selection across all unanswered questions
     # Track recent question categories to avoid repetition
     recent_categories = []
+    category_question_counts = {'IT': 0, 'CS': 0, 'IS': 0}
+    
     if answered_questions:
-        # Get the last 2-3 questions' categories to avoid repetition
+        # Get the last 2-3 questions' course_tags to avoid repetition
+        # CAT-lite: Use course_tag instead of category for course identification
         for ans in answered_questions[-3:]:
             qid = ans.get('question_id')
             if qid:
                 q = get_question_by_id(int(qid))
-                if q and q.category in ['IT', 'CS', 'IS']:
-                    recent_categories.append(q.category)
+                if q and hasattr(q, 'course_tag') and q.course_tag in ['IT', 'CS', 'IS']:
+                    recent_categories.append(q.course_tag)
+                    category_question_counts[q.course_tag] = category_question_counts.get(q.course_tag, 0) + 1
     
     current_scores_for_metrics = norm_scores_01  # 0..1
     utilities = []
@@ -552,8 +719,10 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
         if q.category == 'DIAGNOSTIC':
             continue
         
-        # Skip if this category was asked in the last 2 questions (unless it's the only option)
-        if q.category in recent_categories[-2:]:
+        # Skip if this course_tag was asked in the last 2 questions (unless it's the only option)
+        # CAT-lite: Use course_tag instead of category
+        course_tag = q.course_tag if hasattr(q, 'course_tag') else None
+        if course_tag and course_tag in recent_categories[-2:]:
             # Apply a penalty but don't exclude completely
             category_penalty = 0.15
         else:
@@ -588,12 +757,15 @@ def select_next_question_logic(answered_questions: List[Dict[str, Any]], all_que
         base_utility = (avg_var * 0.25) + (avg_distinction * 0.45) + (info_gain * 0.30)
         
         # Apply category diversity bonus/penalty
-        # If this category hasn't been tested much, give a small bonus
-        category_count = category_question_counts.get(q.category, 0) if q.category in ['IT', 'CS', 'IS'] else 0
+        # CAT-lite: Use course_tag instead of category
+        course_tag = q.course_tag if hasattr(q, 'course_tag') else None
+        category_count = category_question_counts.get(course_tag, 0) if course_tag in ['IT', 'CS', 'IS'] else 0
         diversity_bonus = 0.05 if category_count < 2 else 0.0
         
         utility = base_utility * (1.0 - category_penalty) + diversity_bonus
-        utilities.append((qid_int, utility, q.category))
+        # CAT-lite: Store course_tag for reference
+        course_tag = q.course_tag if hasattr(q, 'course_tag') else 'UNKNOWN'
+        utilities.append((qid_int, utility, course_tag))
 
     if not utilities:
         # No unanswered questions left -> stop

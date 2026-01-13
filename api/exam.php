@@ -311,12 +311,14 @@ function handleSubmitAnswer($examRepo, $questionRepo, $conn)
         return;
     }
 
+    // CAT-lite: category is now 'DIAGNOSTIC' or 'ADAPTIVE' (exam phase)
     $category = $question['category'] ?? 'DIAGNOSTIC';
+    // course_tag will be automatically fetched by saveAnswer() from the question
     $isCorrect = $questionRepo->isAnswerCorrect($questionId, $selectedOption);
     $weight = intval($question['weight'] ?? 1);
     $pointsAwarded = $isCorrect ? $weight : 0;
 
-    // Save answer
+    // Save answer (course_tag will be automatically retrieved from question)
     $answerId = $examRepo->saveAnswer($sessionId, $questionId, $selectedOption, $category, $isCorrect, $pointsAwarded);
     
     if (!$answerId) {
@@ -326,25 +328,29 @@ function handleSubmitAnswer($examRepo, $questionRepo, $conn)
     }
 
     // Update session stage if needed (transition from DIAGNOSTIC to CATEGORY)
+    // CAT-lite: Use course_tag instead of category for course identification
     if ($session['stage'] === 'DIAGNOSTIC' && $category !== 'DIAGNOSTIC') {
-        // Determine dominant category from answers
+        // Determine dominant course from answers using course_tag
         $answers = $examRepo->getSessionAnswers($sessionId);
         $categoryScores = ['IS' => 0, 'IT' => 0, 'CS' => 0];
         
         foreach ($answers as $answer) {
-            if ($answer['category'] !== 'DIAGNOSTIC' && $answer['is_correct']) {
-                $cat = $answer['category'];
-                if (isset($categoryScores[$cat])) {
-                    $categoryScores[$cat] += $answer['points_awarded'];
+            // CAT-lite: Use course_tag for course identification
+            $courseTag = $answer['course_tag'] ?? null;
+            if ($courseTag && $answer['is_correct']) {
+                if (isset($categoryScores[$courseTag])) {
+                    $categoryScores[$courseTag] += $answer['points_awarded'];
                 }
             }
         }
         
         $dominantCategory = array_search(max($categoryScores), $categoryScores);
-        $examRepo->updateSession($sessionId, [
-            'stage' => 'CATEGORY',
-            'dominant_category' => $dominantCategory
-        ]);
+        if ($dominantCategory) {
+            $examRepo->updateSession($sessionId, [
+                'stage' => 'CATEGORY',
+                'dominant_category' => $dominantCategory
+            ]);
+        }
     }
 
     echo json_encode([
@@ -453,10 +459,12 @@ function handleFinishExam($examRepo, $questionRepo, $conn)
         }
     }
 
-    // Calculate final score (sum of points)
+    // Calculate final score (count of correct answers)
     $finalScore = 0;
     foreach ($answers as $answer) {
-        $finalScore += intval($answer['points_awarded']);
+        if (!empty($answer['is_correct'])) {
+            $finalScore++;
+        }
     }
 
     // Update session
@@ -496,7 +504,8 @@ function formatQuestionResponse($question)
         'question_id' => (int)$question['id'],
         'question_text' => $question['question_text'],
         'question_type' => $question['question_type'] ?? 'single',
-        'category' => $question['category'] ?? 'DIAGNOSTIC',
+        'category' => $question['category'] ?? 'DIAGNOSTIC',  // CAT-lite: 'DIAGNOSTIC' or 'ADAPTIVE'
+        'course_tag' => $question['course_tag'] ?? 'IT',      // CAT-lite: 'IT', 'IS', or 'CS'
         'difficulty' => $question['difficulty'] ?? 'MEDIUM',
         'weight' => (int)($question['weight'] ?? 1),
         'options' => []

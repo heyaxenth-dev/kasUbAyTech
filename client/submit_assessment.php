@@ -44,6 +44,7 @@ try {
 
     // Process answers and save them
     $totalPoints = 0;
+    $correctAnswersCount = 0;
     $categoryScores = ['IS' => 0, 'IT' => 0, 'CS' => 0];
     
     foreach ($answers as $answer) {
@@ -60,7 +61,10 @@ try {
             continue;
         }
 
+        // CAT-lite: category is now 'DIAGNOSTIC' or 'ADAPTIVE' (exam phase)
         $category = $question['category'] ?? 'DIAGNOSTIC';
+        // CAT-lite: course_tag identifies which course (IT/IS/CS)
+        $courseTag = $question['course_tag'] ?? 'IT';
         
         // Map option_ids to selected_option (A/B/C/D)
         // For now, we'll use the first option_id and map it to A/B/C/D based on position
@@ -82,14 +86,20 @@ try {
         $weight = intval($question['weight'] ?? 1);
         $pointsAwarded = $isCorrect ? $weight : 0;
         $totalPoints += $pointsAwarded;
-
-        // Save answer
-        $examRepo->saveAnswer($sessionId, $questionId, $selectedOption, $category, $isCorrect, $pointsAwarded);
         
-        // Track category scores (for diagnostic phase)
-        if ($category !== 'DIAGNOSTIC' && $isCorrect) {
-            if (isset($categoryScores[$category])) {
-                $categoryScores[$category] += $pointsAwarded;
+        // Count correct answers for final score
+        if ($isCorrect) {
+            $correctAnswersCount++;
+        }
+
+        // Save answer (course_tag will be automatically retrieved if not provided)
+        $examRepo->saveAnswer($sessionId, $questionId, $selectedOption, $category, $isCorrect, $pointsAwarded, $courseTag);
+        
+        // Track category scores using course_tag (CAT-lite)
+        // For diagnostic phase, track by course_tag to determine dominant course
+        if ($isCorrect) {
+            if (isset($categoryScores[$courseTag])) {
+                $categoryScores[$courseTag] += $pointsAwarded;
             }
         }
     }
@@ -165,7 +175,7 @@ try {
 
     // Save exam result
     if ($stage === 'FINISHED') {
-        $examRepo->saveResult($sessionId, $recommendedCourse, $totalPoints, $confidenceScore);
+        $examRepo->saveResult($sessionId, $recommendedCourse, $correctAnswersCount, $confidenceScore);
     }
 
     // Commit transaction

@@ -25,17 +25,20 @@ DB_CONFIG = {
 ### 3. Start the Service
 
 **Windows:**
+
 ```bash
 start_service.bat
 ```
 
 **Linux/Mac:**
+
 ```bash
 chmod +x start_service.sh
 ./start_service.sh
 ```
 
 **Or manually:**
+
 ```bash
 python adaptive_service.py
 ```
@@ -45,11 +48,13 @@ The service will start on `http://localhost:5000`
 ### 4. Check Service Status
 
 **Quick check:**
+
 ```bash
 python check_service.py
 ```
 
 You should see:
+
 ```
 ✅ Service is RUNNING!
    Status: healthy
@@ -57,11 +62,13 @@ You should see:
 ```
 
 **Or test with full test suite:**
+
 ```bash
 python test_service.py
 ```
 
 You should see:
+
 ```
 ✅ Service is running!
 ✅ All tests passed!
@@ -94,11 +101,13 @@ header("Location: assessment_adaptive.php?id=$lastid");
 ### Example Scenario
 
 **After 2 questions:**
+
 - Current scores: IT: 45%, CS: 38%, IS: 42%
 - Top courses: IT and IS are close
 - Algorithm selects question that best distinguishes IT vs IS
 
 **After 5 questions:**
+
 - Current scores: IT: 52%, CS: 35%, IS: 48%
 - Top courses: IT and IS still close
 - Algorithm focuses on IT vs IS distinction
@@ -110,21 +119,24 @@ header("Location: assessment_adaptive.php?id=$lastid");
 ### Service Won't Start
 
 1. **Check Python version:**
+
    ```bash
    python --version  # Should be 3.7+
    ```
 
 2. **Check dependencies:**
+
    ```bash
    pip list | grep -i flask
    pip list | grep -i mysql
    ```
 
 3. **Check port availability:**
+
    ```bash
    # Windows
    netstat -an | findstr 5000
-   
+
    # Linux/Mac
    lsof -i :5000
    ```
@@ -216,8 +228,8 @@ python adaptive_service.py >> adaptive_service.log 2>&1
 ## Support
 
 For issues:
+
 1. Check `test_service.py` output
 2. Review service logs
 3. Verify database connectivity
 4. Test API endpoints manually with curl/Postman
-

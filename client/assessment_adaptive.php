@@ -19,6 +19,7 @@ $client = $client_result->fetch_assoc();
 $stmt->close();
 
 // Get all active question IDs for reference
+// Updated query works with CAT-lite structure (category and course_tag)
 $questions_result = $conn->query("SELECT id FROM questions WHERE is_active = 1 ORDER BY order_number, id");
 $all_question_ids = [];
 while ($row = $questions_result->fetch_assoc()) {

@@ -75,12 +75,18 @@ include './includes/sidebar.php';
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label for="category" class="form-label">Category</label>
+                            <label for="category" class="form-label">Phase (Category)</label>
                             <select class="form-select" id="category" required>
-                                <option value="DIAGNOSTIC">Diagnostic</option>
-                                <option value="IS">Information System (IS)</option>
+                                <option value="DIAGNOSTIC">Diagnostic (Phase 1)</option>
+                                <option value="ADAPTIVE">Adaptive (Phase 2 & 3)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="courseTag" class="form-label">Course Tag</label>
+                            <select class="form-select" id="courseTag" required>
                                 <option value="IT">Information Technology (IT)</option>
                                 <option value="CS">Computer Science (CS)</option>
+                                <option value="IS">Information System (IS)</option>
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -210,7 +216,8 @@ function renderQuestions() {
                     <td>${q.question_text}</td>
                     <td>
                         <span class="badge bg-${q.question_type === 'single' ? 'primary' : 'info'}">${q.question_type}</span><br>
-                        <span class="badge bg-secondary mt-1">${q.category || 'DIAGNOSTIC'}</span><br>
+                        <span class="badge bg-${q.category === 'DIAGNOSTIC' ? 'info' : 'warning'} mt-1">${q.category || 'DIAGNOSTIC'}</span><br>
+                        <span class="badge bg-primary mt-1">${q.course_tag || 'IT'}</span><br>
                         <span class="badge bg-${q.difficulty === 'HARD' ? 'danger' : q.difficulty === 'MEDIUM' ? 'warning' : 'success'} mt-1">${q.difficulty || 'MEDIUM'}</span>
                     </td>
                     <td>
@@ -243,6 +250,7 @@ function openAddModal() {
     document.getElementById('questionForm').reset();
     document.getElementById('questionId').value = '';
     document.getElementById('category').value = 'DIAGNOSTIC';
+    document.getElementById('courseTag').value = 'IT';
     document.getElementById('difficulty').value = 'MEDIUM';
     document.getElementById('weight').value = 1;
     document.getElementById('correctOption').value = '';
@@ -303,6 +311,7 @@ function editQuestion(id) {
             document.getElementById('questionText').value = data.question_text || '';
             document.getElementById('questionType').value = data.question_type || 'single';
             document.getElementById('category').value = data.category || 'DIAGNOSTIC';
+            document.getElementById('courseTag').value = data.course_tag || 'IT';
             document.getElementById('difficulty').value = data.difficulty || 'MEDIUM';
             document.getElementById('weight').value = data.weight || 1;
             document.getElementById('correctOption').value = data.correct_option || '';
@@ -347,6 +356,7 @@ function saveQuestion() {
         question_text: document.getElementById('questionText').value,
         question_type: document.getElementById('questionType').value,
         category: document.getElementById('category').value,
+        course_tag: document.getElementById('courseTag').value, // CAT-lite: Include course_tag
         difficulty: document.getElementById('difficulty').value,
         weight: parseInt(document.getElementById('weight').value),
         correct_option: document.getElementById('correctOption').value || null,

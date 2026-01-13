@@ -3,6 +3,7 @@ include './authentication.php';
 include '../database/config.php';
 
 // Get all exam sessions with results and student info (aligned with new exam_results schema)
+// CAT-lite: Include course score breakdown for analytics
 $query = "SELECT 
             es.id, 
             es.user_id, 
@@ -16,7 +17,10 @@ $query = "SELECT
             er.final_score, 
             er.confidence_score, 
             er.created_at AS completed_at,
-            (SELECT COUNT(*) FROM exam_answers WHERE session_id = es.id) AS answered_questions
+            (SELECT COUNT(*) FROM exam_answers WHERE session_id = es.id) AS answered_questions,
+            (SELECT COUNT(*) FROM exam_answers WHERE session_id = es.id AND course_tag = 'IT' AND is_correct = 1) AS it_score,
+            (SELECT COUNT(*) FROM exam_answers WHERE session_id = es.id AND course_tag = 'CS' AND is_correct = 1) AS cs_score,
+            (SELECT COUNT(*) FROM exam_answers WHERE session_id = es.id AND course_tag = 'IS' AND is_correct = 1) AS is_score
           FROM exam_sessions es
           JOIN client c ON es.user_id = c.id
           LEFT JOIN exam_results er ON es.id = er.session_id
@@ -56,6 +60,7 @@ include './includes/sidebar.php';
                                         <th>Completed At</th>
                                         <th>Stage</th>
                                         <th>Answered</th>
+                                        <th>Course Scores</th>
                                         <th>Recommended</th>
                                         <th>Final Score</th>
                                         <th>Confidence</th>
@@ -88,6 +93,13 @@ include './includes/sidebar.php';
                                         </td>
                                         <td><?php echo $result['answered_questions']; ?></td>
                                         <td>
+                                            <small>
+                                                IT: <strong><?php echo intval($result['it_score'] ?? 0); ?></strong> |
+                                                CS: <strong><?php echo intval($result['cs_score'] ?? 0); ?></strong> |
+                                                IS: <strong><?php echo intval($result['is_score'] ?? 0); ?></strong>
+                                            </small>
+                                        </td>
+                                        <td>
                                             <?php if ($result['recommended_course'] && $result['recommended_course'] !== 'UNDECIDED'): ?>
                                             <span
                                                 class="badge bg-primary"><?php echo $result['recommended_course']; ?></span>
@@ -112,7 +124,7 @@ include './includes/sidebar.php';
                                     <?php endforeach; ?>
                                     <?php else: ?>
                                     <tr>
-                                        <td colspan="10" class="text-center">No assessment results found.</td>
+                                        <td colspan="11" class="text-center">No assessment results found.</td>
                                     </tr>
                                     <?php endif; ?>
                                 </tbody>

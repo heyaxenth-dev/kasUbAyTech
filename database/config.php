@@ -1,13 +1,18 @@
 <?php
 /**
- * Database Configuration
+ * Database Configuration - CAT-lite Version
  * 
  * Provides database connection for the exam system
  * Uses mysqli object-oriented interface
+ * 
+ * Updated to use the new CAT-lite database structure:
+ * - Database: kasubaytech_catlite_db
+ * - Supports course_tag and category separation
  */
 
 $host = "localhost";
-$db = "kasubaytech_db";
+// Use CAT-lite database for the new adaptive algorithm
+$db = "kasubaytech_catlite_db";
 $root = "root";
 $password = "";
 

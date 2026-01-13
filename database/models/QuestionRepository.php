@@ -23,9 +23,10 @@ class QuestionRepository
      */
     public function getQuestionById($questionId)
     {
+        // CAT-lite: Include course_tag in query
         $stmt = $this->conn->prepare(
             "SELECT id, question_text, option_a, option_b, option_c, option_d, 
-                    correct_option, category, difficulty, weight 
+                    correct_option, category, course_tag, difficulty, weight 
              FROM questions 
              WHERE id = ? AND is_active = 1"
         );
@@ -73,9 +74,10 @@ class QuestionRepository
     public function getDiagnosticQuestions($answeredQuestionIds = [], $limit = 10)
     {
         if (empty($answeredQuestionIds)) {
+            // CAT-lite: Include course_tag in query
             $stmt = $this->conn->prepare(
                 "SELECT id, question_text, option_a, option_b, option_c, option_d, 
-                        correct_option, category, difficulty, weight 
+                        correct_option, category, course_tag, difficulty, weight 
                  FROM questions 
                  WHERE category = 'DIAGNOSTIC' AND is_active = 1 
                  ORDER BY difficulty, id 
@@ -89,9 +91,10 @@ class QuestionRepository
             $stmt->bind_param("i", $limit);
         } else {
             $placeholders = str_repeat('?,', count($answeredQuestionIds) - 1) . '?';
+            // CAT-lite: Include course_tag in query
             $stmt = $this->conn->prepare(
                 "SELECT id, question_text, option_a, option_b, option_c, option_d, 
-                        correct_option, category, difficulty, weight 
+                        correct_option, category, course_tag, difficulty, weight 
                  FROM questions 
                  WHERE category = 'DIAGNOSTIC' AND is_active = 1 
                    AND id NOT IN ($placeholders)
@@ -117,25 +120,28 @@ class QuestionRepository
     }
 
     /**
-     * Get questions by category (not yet answered)
+     * Get questions by course_tag (not yet answered)
+     * CAT-lite: Updated to use course_tag instead of category for course identification
      * 
-     * @param string $category 'IS', 'IT', or 'CS'
+     * @param string $courseTag 'IS', 'IT', or 'CS' (course identity)
      * @param array $answeredQuestionIds Array of question IDs already answered
      * @param int $limit Maximum number of questions to return
      * @return array Array of question records
      */
-    public function getQuestionsByCategory($category, $answeredQuestionIds = [], $limit = 10)
+    public function getQuestionsByCategory($courseTag, $answeredQuestionIds = [], $limit = 10)
     {
-        if (!in_array($category, ['IS', 'IT', 'CS'])) {
+        // CAT-lite: Validate course_tag instead of category
+        if (!in_array($courseTag, ['IS', 'IT', 'CS'])) {
             return [];
         }
 
         if (empty($answeredQuestionIds)) {
+            // CAT-lite: Query by course_tag and category='ADAPTIVE'
             $stmt = $this->conn->prepare(
                 "SELECT id, question_text, option_a, option_b, option_c, option_d, 
-                        correct_option, category, difficulty, weight 
+                        correct_option, category, course_tag, difficulty, weight 
                  FROM questions 
-                 WHERE category = ? AND is_active = 1 
+                 WHERE category = 'ADAPTIVE' AND course_tag = ? AND is_active = 1 
                  ORDER BY difficulty, id 
                  LIMIT ?"
             );
@@ -144,14 +150,15 @@ class QuestionRepository
                 return [];
             }
 
-            $stmt->bind_param("si", $category, $limit);
+            $stmt->bind_param("si", $courseTag, $limit);
         } else {
             $placeholders = str_repeat('?,', count($answeredQuestionIds) - 1) . '?';
+            // CAT-lite: Query by course_tag and category='ADAPTIVE'
             $stmt = $this->conn->prepare(
                 "SELECT id, question_text, option_a, option_b, option_c, option_d, 
-                        correct_option, category, difficulty, weight 
+                        correct_option, category, course_tag, difficulty, weight 
                  FROM questions 
-                 WHERE category = ? AND is_active = 1 
+                 WHERE category = 'ADAPTIVE' AND course_tag = ? AND is_active = 1 
                    AND id NOT IN ($placeholders)
                  ORDER BY difficulty, id 
                  LIMIT ?"
@@ -162,7 +169,7 @@ class QuestionRepository
             }
 
             $types = 's' . str_repeat('i', count($answeredQuestionIds)) . 'i';
-            $params = array_merge([$category], $answeredQuestionIds, [$limit]);
+            $params = array_merge([$courseTag], $answeredQuestionIds, [$limit]);
             $stmt->bind_param($types, ...$params);
         }
 

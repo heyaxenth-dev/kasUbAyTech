@@ -18,7 +18,8 @@ switch ($method) {
         // Get all questions or single question
         if (isset($_GET['id'])) {
             $id = intval($_GET['id']);
-            $stmt = $conn->prepare("SELECT id, question_text, question_type, category, difficulty, weight, correct_option, option_a, option_b, option_c, option_d, order_number, is_active FROM questions WHERE id = ?");
+            // CAT-lite: Include course_tag in query
+            $stmt = $conn->prepare("SELECT id, question_text, question_type, category, course_tag, difficulty, weight, correct_option, option_a, option_b, option_c, option_d, order_number, is_active FROM questions WHERE id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -35,7 +36,8 @@ switch ($method) {
             
             echo json_encode($question ? $question : ['error' => 'Question not found']);
         } else {
-            $result = $conn->query("SELECT id, question_text, question_type, category, difficulty, weight, correct_option, option_a, option_b, option_c, option_d, order_number, is_active FROM questions ORDER BY category, order_number, id");
+            // CAT-lite: Include course_tag in query
+            $result = $conn->query("SELECT id, question_text, question_type, category, course_tag, difficulty, weight, correct_option, option_a, option_b, option_c, option_d, order_number, is_active FROM questions ORDER BY category, course_tag, order_number, id");
             $questions = $result->fetch_all(MYSQLI_ASSOC);
             echo json_encode($questions);
         }
@@ -47,6 +49,7 @@ switch ($method) {
         $question_text = $conn->real_escape_string($data['question_text']);
         $question_type = $data['question_type'] ?? 'single';
         $category = $data['category'] ?? 'DIAGNOSTIC';
+        $course_tag = $data['course_tag'] ?? 'IT'; // CAT-lite: course_tag required
         $difficulty = $data['difficulty'] ?? 'MEDIUM';
         $weight = intval($data['weight'] ?? 1);
         $correct_option = $data['correct_option'] ?? null;
@@ -56,8 +59,9 @@ switch ($method) {
         $option_d = isset($data['option_d']) ? $conn->real_escape_string($data['option_d']) : null;
         $order_number = intval($data['order_number'] ?? 0);
         
-        $stmt = $conn->prepare("INSERT INTO questions (question_text, question_type, category, difficulty, weight, correct_option, option_a, option_b, option_c, option_d, order_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssssisssssi", $question_text, $question_type, $category, $difficulty, $weight, $correct_option, $option_a, $option_b, $option_c, $option_d, $order_number);
+        // CAT-lite: Include course_tag in INSERT
+        $stmt = $conn->prepare("INSERT INTO questions (question_text, question_type, category, course_tag, difficulty, weight, correct_option, option_a, option_b, option_c, option_d, order_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("sssssisssssi", $question_text, $question_type, $category, $course_tag, $difficulty, $weight, $correct_option, $option_a, $option_b, $option_c, $option_d, $order_number);
         
         if ($stmt->execute()) {
             $question_id = $stmt->insert_id;
@@ -90,6 +94,7 @@ switch ($method) {
         $question_text = $conn->real_escape_string($data['question_text']);
         $question_type = $data['question_type'] ?? 'single';
         $category = $data['category'] ?? 'DIAGNOSTIC';
+        $course_tag = $data['course_tag'] ?? 'IT'; // CAT-lite: course_tag required
         $difficulty = $data['difficulty'] ?? 'MEDIUM';
         $weight = intval($data['weight'] ?? 1);
         $correct_option = $data['correct_option'] ?? null;
@@ -100,8 +105,9 @@ switch ($method) {
         $order_number = intval($data['order_number'] ?? 0);
         $is_active = intval($data['is_active'] ?? 1);
         
-        $stmt = $conn->prepare("UPDATE questions SET question_text = ?, question_type = ?, category = ?, difficulty = ?, weight = ?, correct_option = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, order_number = ?, is_active = ? WHERE id = ?");
-        $stmt->bind_param("ssssissssssii", $question_text, $question_type, $category, $difficulty, $weight, $correct_option, $option_a, $option_b, $option_c, $option_d, $order_number, $is_active, $id);
+        // CAT-lite: Include course_tag in UPDATE
+        $stmt = $conn->prepare("UPDATE questions SET question_text = ?, question_type = ?, category = ?, course_tag = ?, difficulty = ?, weight = ?, correct_option = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, order_number = ?, is_active = ? WHERE id = ?");
+        $stmt->bind_param("sssssissssssii", $question_text, $question_type, $category, $course_tag, $difficulty, $weight, $correct_option, $option_a, $option_b, $option_c, $option_d, $order_number, $is_active, $id);
         
         if ($stmt->execute()) {
             // Update or insert answer options
