@@ -9,6 +9,11 @@
  * - POST /api/exam.php?action=finish-exam
  */
 
+// Suppress error display to prevent HTML output in JSON responses
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+error_reporting(E_ALL);
+
 header('Content-Type: application/json');
 require_once __DIR__ . '/../database/config.php';
 require_once __DIR__ . '/../database/models/ExamRepository.php';
@@ -230,37 +235,200 @@ function handleGetQuestion($examRepo, $questionRepo, $conn)
         return;
     }
 
-    // Get question details from database
-    $questionId = $adaptiveResponse['question']['question_id'] ?? null;
+    // Try to get a valid question (with options) - retry up to 10 times
+    $maxRetries = 10;
+    $attempts = 0;
+    $skippedQuestionIds = [];
     
-    if (!$questionId) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Invalid question ID from adaptive service']);
+    while ($attempts < $maxRetries) {
+        $attempts++;
+        
+        // Get question details from database
+        $questionId = $adaptiveResponse['question']['question_id'] ?? null;
+        
+        if (!$questionId) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Invalid question ID from adaptive service']);
+            return;
+        }
+        
+        // Skip if we've already tried this question
+        if (in_array($questionId, $skippedQuestionIds)) {
+            // Mark this question as answered with a skip to exclude it from next request
+            // Get question to determine category
+            $skipQuestion = $questionRepo->getQuestionById($questionId);
+            $skipCategory = $skipQuestion ? ($skipQuestion['category'] ?? 'DIAGNOSTIC') : 'DIAGNOSTIC';
+            $examRepo->saveAnswer($sessionId, $questionId, 'A', $skipCategory, false, 0); // Dummy answer
+            $answeredQuestions[] = ['question_id' => (int)$questionId, 'option_ids' => [0]];
+            
+            // Get next question from adaptive service
+            $ch = curl_init($adaptiveServiceUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+                'answered_questions' => $answeredQuestions,
+                'all_question_ids' => $allQuestionIds
+            ]));
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($httpCode !== 200 || !$response) {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'error' => 'Failed to get next question after skipping']);
+                return;
+            }
+            
+            $adaptiveResponse = json_decode($response, true);
+            
+            if (!$adaptiveResponse || !$adaptiveResponse['success'] || (isset($adaptiveResponse['stop']) && $adaptiveResponse['stop'])) {
+                // If service says to stop, return that
+                echo json_encode([
+                    'success' => true,
+                    'stop' => true,
+                    'reason' => $adaptiveResponse['reason'] ?? 'completed',
+                    'scores' => $adaptiveResponse['scores'] ?? [],
+                    'recommended_course' => $adaptiveResponse['recommended_course'] ?? 'UNDECIDED'
+                ]);
+                return;
+            }
+            
+            continue; // Try next question
+        }
+        
+        $question = $questionRepo->getQuestionById($questionId);
+        
+        if (!$question) {
+            error_log("Question {$questionId} not found in database, skipping");
+            $skippedQuestionIds[] = $questionId;
+            // Mark as answered to exclude from next request
+            $examRepo->saveAnswer($sessionId, $questionId, 'A', 'DIAGNOSTIC', false, 0); // Dummy answer
+            $answeredQuestions[] = ['question_id' => (int)$questionId, 'option_ids' => [0]];
+            
+            // Get next question from adaptive service
+            $ch = curl_init($adaptiveServiceUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+                'answered_questions' => $answeredQuestions,
+                'all_question_ids' => $allQuestionIds
+            ]));
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($httpCode !== 200 || !$response) {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'error' => 'Failed to get next question after skipping']);
+                return;
+            }
+            
+            $adaptiveResponse = json_decode($response, true);
+            
+            if (!$adaptiveResponse || !$adaptiveResponse['success'] || (isset($adaptiveResponse['stop']) && $adaptiveResponse['stop'])) {
+                // If service says to stop, return that
+                echo json_encode([
+                    'success' => true,
+                    'stop' => true,
+                    'reason' => $adaptiveResponse['reason'] ?? 'completed',
+                    'scores' => $adaptiveResponse['scores'] ?? [],
+                    'recommended_course' => $adaptiveResponse['recommended_course'] ?? 'UNDECIDED'
+                ]);
+                return;
+            }
+            
+            continue; // Try next question
+        }
+        
+        // Check if question has options before formatting
+        $hasOptions = false;
+        // Check option_a, option_b, option_c, option_d
+        foreach (['option_a', 'option_b', 'option_c', 'option_d'] as $optKey) {
+            if (!empty($question[$optKey])) {
+                $hasOptions = true;
+                break;
+            }
+        }
+        // Check answer_options table
+        if (!$hasOptions && isset($question['options']) && is_array($question['options']) && count($question['options']) > 0) {
+            foreach ($question['options'] as $opt) {
+                if (!empty($opt['option_text'])) {
+                    $hasOptions = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!$hasOptions) {
+            error_log("Question {$questionId} has no valid options, skipping");
+            $skippedQuestionIds[] = $questionId;
+            // Mark as answered to exclude from next request
+            $category = $question['category'] ?? 'DIAGNOSTIC';
+            $examRepo->saveAnswer($sessionId, $questionId, 'A', $category, false, 0); // Dummy answer
+            $answeredQuestions[] = ['question_id' => (int)$questionId, 'option_ids' => [0]];
+            
+            // Get next question from adaptive service
+            $ch = curl_init($adaptiveServiceUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+                'answered_questions' => $answeredQuestions,
+                'all_question_ids' => $allQuestionIds
+            ]));
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($httpCode !== 200 || !$response) {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'error' => 'Failed to get next question after skipping']);
+                return;
+            }
+            
+            $adaptiveResponse = json_decode($response, true);
+            
+            if (!$adaptiveResponse || !$adaptiveResponse['success'] || (isset($adaptiveResponse['stop']) && $adaptiveResponse['stop'])) {
+                // If service says to stop, return that
+                echo json_encode([
+                    'success' => true,
+                    'stop' => true,
+                    'reason' => $adaptiveResponse['reason'] ?? 'completed',
+                    'scores' => $adaptiveResponse['scores'] ?? [],
+                    'recommended_course' => $adaptiveResponse['recommended_course'] ?? 'UNDECIDED'
+                ]);
+                return;
+            }
+            
+            continue; // Try next question
+        }
+        
+        // Question has options, proceed
+        // Update session with current question
+        $examRepo->updateSession($sessionId, ['current_question_id' => $questionId]);
+        
+        // Format response
+        $questionData = formatQuestionResponse($question);
+        $questionData['current_scores'] = $adaptiveResponse['question']['current_scores'] ?? [];
+        $questionData['utility_score'] = $adaptiveResponse['question']['utility_score'] ?? null;
+        $questionData['reason'] = $adaptiveResponse['question']['reason'] ?? '';
+        
+        echo json_encode([
+            'success' => true,
+            'stop' => false,
+            'question' => $questionData
+        ]);
         return;
     }
-
-    $question = $questionRepo->getQuestionById($questionId);
     
-    if (!$question) {
-        http_response_code(404);
-        echo json_encode(['success' => false, 'error' => 'Question not found']);
-        return;
-    }
-
-    // Update session with current question
-    $examRepo->updateSession($sessionId, ['current_question_id' => $questionId]);
-
-    // Format response
-    $questionData = formatQuestionResponse($question);
-    $questionData['current_scores'] = $adaptiveResponse['question']['current_scores'] ?? [];
-    $questionData['utility_score'] = $adaptiveResponse['question']['utility_score'] ?? null;
-    $questionData['reason'] = $adaptiveResponse['question']['reason'] ?? '';
-
-    echo json_encode([
-        'success' => true,
-        'stop' => false,
-        'question' => $questionData
-    ]);
+    // If we've exhausted retries
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Unable to find a question with valid options. Please check database.']);
 }
 
 /**

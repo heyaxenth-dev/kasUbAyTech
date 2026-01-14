@@ -3,7 +3,7 @@ include './authentication.php';
 include '../database/config.php';
 
 // Get all exam sessions with results and student info (aligned with new exam_results schema)
-// CAT-lite: Include course score breakdown for analytics
+// First get basic session data
 $query = "SELECT 
             es.id, 
             es.user_id, 
@@ -17,15 +17,63 @@ $query = "SELECT
             er.final_score, 
             er.confidence_score, 
             er.created_at AS completed_at,
-            (SELECT COUNT(*) FROM exam_answers WHERE session_id = es.id) AS answered_questions,
-            (SELECT COUNT(*) FROM exam_answers WHERE session_id = es.id AND course_tag = 'IT' AND is_correct = 1) AS it_score,
-            (SELECT COUNT(*) FROM exam_answers WHERE session_id = es.id AND course_tag = 'CS' AND is_correct = 1) AS cs_score,
-            (SELECT COUNT(*) FROM exam_answers WHERE session_id = es.id AND course_tag = 'IS' AND is_correct = 1) AS is_score
+            (SELECT COUNT(*) FROM exam_answers WHERE session_id = es.id) AS answered_questions
           FROM exam_sessions es
           JOIN client c ON es.user_id = c.id
           LEFT JOIN exam_results er ON es.id = er.session_id
           ORDER BY es.created_at DESC";
 $results = $conn->query($query)->fetch_all(MYSQLI_ASSOC);
+
+// Calculate course scores for each session
+foreach ($results as &$result) {
+    $sessionId = $result['id'];
+    $itScore = 0;
+    $csScore = 0;
+    $isScore = 0;
+    
+    // Get all answers for this session
+    $answersQuery = "SELECT ea.question_id, ea.selected_option 
+                     FROM exam_answers ea 
+                     WHERE ea.session_id = ?";
+    $stmt = $conn->prepare($answersQuery);
+    $stmt->bind_param("i", $sessionId);
+    $stmt->execute();
+    $answers = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    
+    // For each answer, get the option scores
+    foreach ($answers as $answer) {
+        $questionId = $answer['question_id'];
+        $selectedOption = $answer['selected_option'];
+        
+        // Map A/B/C/D to index (0, 1, 2, 3)
+        $optionIndex = ['A' => 0, 'B' => 1, 'C' => 2, 'D' => 3][$selectedOption] ?? 0;
+        
+        // Get the option scores for the selected option
+        $optionQuery = "SELECT it_score, cs_score, is_score 
+                        FROM answer_options 
+                        WHERE question_id = ? 
+                        ORDER BY id 
+                        LIMIT 1 OFFSET ?";
+        $optStmt = $conn->prepare($optionQuery);
+        $optStmt->bind_param("ii", $questionId, $optionIndex);
+        $optStmt->execute();
+        $optionResult = $optStmt->get_result();
+        
+        if ($optionRow = $optionResult->fetch_assoc()) {
+            $itScore += floatval($optionRow['it_score'] ?? 0);
+            $csScore += floatval($optionRow['cs_score'] ?? 0);
+            $isScore += floatval($optionRow['is_score'] ?? 0);
+        }
+        $optStmt->close();
+    }
+    
+    $result['it_score'] = $itScore;
+    $result['cs_score'] = $csScore;
+    $result['is_score'] = $isScore;
+}
+unset($result); // Break reference
+
 $conn->close();
 
 include './includes/header.php';
@@ -91,12 +139,12 @@ include './includes/sidebar.php';
                                             <span class="badge bg-secondary">Diagnostic</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td><?php echo $result['answered_questions']; ?></td>
+                                        <td><?php echo intval($result['answered_questions'] ?? 0); ?></td>
                                         <td>
                                             <small>
-                                                IT: <strong><?php echo intval($result['it_score'] ?? 0); ?></strong> |
-                                                CS: <strong><?php echo intval($result['cs_score'] ?? 0); ?></strong> |
-                                                IS: <strong><?php echo intval($result['is_score'] ?? 0); ?></strong>
+                                                IT: <strong><?php echo number_format(floatval($result['it_score'] ?? 0), 1); ?></strong> |
+                                                CS: <strong><?php echo number_format(floatval($result['cs_score'] ?? 0), 1); ?></strong> |
+                                                IS: <strong><?php echo number_format(floatval($result['is_score'] ?? 0), 1); ?></strong>
                                             </small>
                                         </td>
                                         <td>

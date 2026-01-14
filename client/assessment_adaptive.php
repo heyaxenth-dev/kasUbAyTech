@@ -307,19 +307,17 @@ $adaptive_service_url = 'http://localhost:5000';
                                 // Check if question has options
                                 if (!question.options || !Array.isArray(question.options) || question.options.length ===
                                     0) {
-                                    console.error('Question has no valid options:', {
+                                    console.warn('Question has no valid options, automatically skipping:', {
+                                        question_id: question.question_id,
                                         hasOptions: !!question.options,
                                         isArray: Array.isArray(question.options),
                                         length: question.options ? question.options.length : 0,
                                         options: question.options
                                     });
-                                    container.innerHTML = `
-                                        <div class="alert alert-warning">
-                                            <h6>Error loading question options</h6>
-                                            <p>This question has no available options. Please contact support.</p>
-                                            <button type="button" class="btn btn-primary" onclick="loadNextQuestion()">Skip Question</button>
-                                        </div>
-                                    `;
+                                    // Automatically skip to next question instead of showing error
+                                    setTimeout(() => {
+                                        loadNextQuestion();
+                                    }, 100);
                                     return;
                                 }
 
@@ -357,14 +355,13 @@ $adaptive_service_url = 'http://localhost:5000';
                                 });
 
                                 if (validOptionsCount === 0) {
-                                    console.error('No valid options found after filtering');
-                                    container.innerHTML = `
-                                        <div class="alert alert-warning">
-                                            <h6>Error loading question options</h6>
-                                            <p>No valid answer options found for this question.</p>
-                                            <button type="button" class="btn btn-primary" onclick="loadNextQuestion()">Skip Question</button>
-                                        </div>
-                                    `;
+                                    console.warn('No valid options found after filtering, automatically skipping:', {
+                                        question_id: question.question_id
+                                    });
+                                    // Automatically skip to next question instead of showing error
+                                    setTimeout(() => {
+                                        loadNextQuestion();
+                                    }, 100);
                                     return;
                                 }
 

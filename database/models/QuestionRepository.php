@@ -25,7 +25,7 @@ class QuestionRepository
     {
         // CAT-lite: Include course_tag in query
         $stmt = $this->conn->prepare(
-            "SELECT id, question_text, option_a, option_b, option_c, option_d, 
+            "SELECT id, question_text, question_type, option_a, option_b, option_c, option_d, 
                     correct_option, category, course_tag, difficulty, weight 
              FROM questions 
              WHERE id = ? AND is_active = 1"
